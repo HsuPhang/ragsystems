@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import admin, chat, knowledge
+from app.api.routes import admin, chat, knowledge, system
 from app.api.schemas import GenericResponse
 from app.utils import logger, setup_logger
 
@@ -58,3 +58,4 @@ def health() -> GenericResponse:
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(knowledge.router)
+app.include_router(system.router)

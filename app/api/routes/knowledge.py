@@ -90,13 +90,14 @@ async def upload_document(
         li_docs = [LIDocument(text=text, metadata={"file_name": file.filename})]
 
     kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+    kw_str = ", ".join(kw_list)
     for d in li_docs:
         d.metadata.update({
             "source": source or file.filename or "未知",
             "category": category or "未分类",
             "author": author,
             "update_time": update_time,
-            "keywords": kw_list,
+            "keywords": kw_str,
             "doc_id": doc_id,
         })
 
@@ -108,7 +109,7 @@ async def upload_document(
             "category": category or "未分类",
             "author": author,
             "update_time": update_time,
-            "keywords": kw_list,
+            "keywords": kw_str,
         })
         for n in nodes
     ]

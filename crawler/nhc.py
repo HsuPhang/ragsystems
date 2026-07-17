@@ -51,7 +51,7 @@ def discover_article_links(entry_url: str) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
     links = set()
     for a in soup.select("a[href]"):
-        href = a.get("href", "")
+        href = str(a.get("href", ""))
         if not href:
             continue
         # 卫健委文章 URL 通常形如 /wjw/jkp/yyyymmdd/xxx.shtml

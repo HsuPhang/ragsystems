@@ -45,7 +45,7 @@ def discover_links(entry_url: str) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
     links = set()
     for a in soup.select("a[href]"):
-        href = a.get("href", "")
+        href = str(a.get("href", ""))
         text = normalize_space(a.get_text())
         # 只保留明显是文章页的链接（有标题文字 + 路径含 /20/ 年份）
         if not text or len(text) < 4:

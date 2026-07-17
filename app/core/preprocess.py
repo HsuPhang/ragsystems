@@ -22,6 +22,14 @@ from app.utils import logger
 DOC_META_KEYS = ("source", "category", "author", "update_time", "keywords", "url")
 
 
+def _flatten_meta(meta: dict) -> dict:
+    """把 metadata 中的 list/tuple 转成逗号分隔字符串（Chroma 不支持非标量类型）。"""
+    return {
+        k: ", ".join(str(x) for x in v) if isinstance(v, (list, tuple)) else v
+        for k, v in meta.items()
+    }
+
+
 def _normalize_doc_metadata(doc: Document) -> Document:
     """清洗 / 补全文档级 metadata。"""
     meta = dict(doc.metadata or {})
@@ -30,12 +38,12 @@ def _normalize_doc_metadata(doc: Document) -> Document:
     meta.setdefault("category", "未分类")
     meta.setdefault("author", "")
     meta.setdefault("update_time", "")
-    meta.setdefault("keywords", [])
+    meta.setdefault("keywords", "")
     meta.setdefault("url", "")
     # 文件名固定
     if "file_name" not in meta and doc.metadata.get("file_path"):
         meta["file_name"] = Path(doc.metadata["file_path"]).name
-    doc.metadata = meta
+    doc.metadata = _flatten_meta(meta)
     return doc
 
 
@@ -97,7 +105,7 @@ def enrich_node_metadata(
     if "chunk_id" not in meta:
         from app.utils import gen_id
         meta["chunk_id"] = gen_id("chunk")
-    node.metadata = meta
+    node.metadata = _flatten_meta(meta)
     return node
 
 

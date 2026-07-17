@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
     session_id: str | None = None
-    use_rerank: bool = True
+    use_rerank: bool = False
     top_k: int | None = None
     category: str | None = None  # 按分类过滤
 

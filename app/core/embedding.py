@@ -55,7 +55,7 @@ def embed_query(text: str) -> list[float]:
     elif "zh" in model_name:
         try:
             from llama_index.embeddings.huggingface.utils import format_query
-            text_to_encode = format_query(text)
+            text_to_encode = format_query(text, settings.EMBEDDING_MODEL_PATH)
         except ImportError:
             text_to_encode = text
     else:

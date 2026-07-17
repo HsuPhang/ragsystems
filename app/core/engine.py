@@ -87,7 +87,7 @@ def _format_contexts(nodes) -> list[dict]:
 
 def answer(
     query: str,
-    use_rerank: bool = True,
+    use_rerank: bool = False,
     top_k: int | None = None,
     filters: dict[str, Any] | None = None,
 ) -> QAResult:
@@ -109,7 +109,11 @@ def answer(
 
     # ③ Reranker 重排
     if use_rerank:
-        result = rerank(query, result)
+        try:
+            result = rerank(query, result)
+        except Exception as e:
+            logger.warning(f"Reranker 重排失败，已跳过: {e}")
+            # 保持原始检索结果继续执行
 
     # ④ 构造 Prompt
     contexts = _format_contexts(result.nodes)

@@ -20,6 +20,31 @@ from app.db import Admin, ChatMessage, ChatSession, Document, SystemLog, get_db
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
 
+@router.post("/register", response_model=LoginResponse)
+def register(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> LoginResponse:
+    """注册新管理员账号。"""
+    from app.api.auth import hash_password
+
+    if len(req.username) < 2 or len(req.username) > 20:
+        raise HTTPException(status_code=400, detail="用户名长度需在2-20字符之间")
+    if len(req.password) < 4:
+        raise HTTPException(status_code=400, detail="密码长度不能少于4位")
+
+    existing = db.query(Admin).filter(Admin.username == req.username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="用户名已存在")
+
+    admin = Admin(
+        username=req.username,
+        password_hash=hash_password(req.password),
+    )
+    db.add(admin)
+    db.commit()
+
+    token = create_token({"sub": admin.username, "role": "admin"})
+    return LoginResponse(access_token=token, username=admin.username)
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> LoginResponse:
     """管理员登录（首次使用 .env 中的默认账号自动建账号）。"""

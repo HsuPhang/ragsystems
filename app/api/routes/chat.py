@@ -46,7 +46,7 @@ def chat(req: ChatRequest, db: Annotated[Session, Depends(get_db)]) -> ChatRespo
         session_id=session_id,
         role="assistant",
         content=result.answer,
-        sources=[s.__dict__ for s in result.sources] if result.sources else [],
+        sources=result.sources if result.sources else [],
         top_score=result.top_score,
         rejected=1 if result.rejected else 0,
     ))
