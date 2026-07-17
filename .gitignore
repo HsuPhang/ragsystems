@@ -20,3 +20,4 @@ data/processed/
 # 系统
 .DS_Store
 Thumbs.db
+web/node_modules
