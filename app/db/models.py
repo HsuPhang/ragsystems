@@ -88,7 +88,7 @@ class ChatSession(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(255), default="新会话")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

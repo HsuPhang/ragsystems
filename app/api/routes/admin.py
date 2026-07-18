@@ -19,6 +19,8 @@ from app.db import Admin, ChatMessage, ChatSession, Document, SystemLog, get_db
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
+_admin_initialized = False
+
 
 @router.post("/register", response_model=LoginResponse)
 def register(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> LoginResponse:
@@ -48,16 +50,19 @@ def register(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> Logi
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> LoginResponse:
     """管理员登录（首次使用 .env 中的默认账号自动建账号）。"""
-    # 1. 自动初始化默认管理员（首次启动时）
-    if not db.query(Admin).filter(Admin.username == settings.ADMIN_USERNAME).first():
-        from app.api.auth import hash_password
-        db.add(Admin(
-            username=settings.ADMIN_USERNAME,
-            password_hash=hash_password(settings.ADMIN_PASSWORD),
-        ))
-        db.commit()
-        logger_msg = f"已自动创建默认管理员: {settings.ADMIN_USERNAME}"
-        print(logger_msg)
+    # 1. 自动初始化默认管理员（仅在首次登录时执行一次）
+    global _admin_initialized
+    if not _admin_initialized:
+        if not db.query(Admin).filter(Admin.username == settings.ADMIN_USERNAME).first():
+            from app.api.auth import hash_password
+            db.add(Admin(
+                username=settings.ADMIN_USERNAME,
+                password_hash=hash_password(settings.ADMIN_PASSWORD),
+            ))
+            db.commit()
+            logger_msg = f"已自动创建默认管理员: {settings.ADMIN_USERNAME}"
+            print(logger_msg)
+        _admin_initialized = True
 
     admin = db.query(Admin).filter(Admin.username == req.username).first()
     if not admin or not verify_password(req.password, admin.password_hash):

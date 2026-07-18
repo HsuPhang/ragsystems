@@ -48,7 +48,7 @@ import { useSidebar } from '../composables/useSidebar.js'
 import { useAuth } from '../composables/useAuth.js'
 import { getSystemConfig, getRecentSessions, sendChatMessage, getChatHistory } from '../services/api.js'
 
-const { username, isAuthenticated, logout } = useAuth()
+const { username: authUsername, isAuthenticated, logout } = useAuth()
 
 // ===== 动态配置（从后端获取，失败时用默认值兜底） =====
 const appName = ref('Gemini')
@@ -90,9 +90,11 @@ const {
 // ===== 会话状态 =====
 const currentSessionId = ref(null)
 const messages = ref([])
+const loadingRecent = ref(false)
+let refreshTimer = null
 
-// ===== 初始化：从后端加载数据 =====
-onMounted(async () => {
+// ===== 从后端加载用户配置和会话列表 =====
+async function loadUserData() {
   const [configRes, sessionsRes] = await Promise.allSettled([
     getSystemConfig(),
     getRecentSessions(),
@@ -100,11 +102,11 @@ onMounted(async () => {
 
   if (configRes.status === 'fulfilled' && configRes.value?.data) {
     const cfg = configRes.value.data
-    if (cfg.appName) appName.value = cfg.appName
-    if (cfg.userName) userName.value = cfg.userName
-    if (cfg.shortcutText) shortcutText.value = cfg.shortcutText
-    if (cfg.searchPlaceholder) searchPlaceholder.value = cfg.searchPlaceholder
-    if (cfg.extensionLabel) extensionLabel.value = cfg.extensionLabel
+    if (cfg.appName !== undefined) appName.value = cfg.appName
+    if (cfg.userName !== undefined) userName.value = cfg.userName
+    if (cfg.shortcutText !== undefined) shortcutText.value = cfg.shortcutText
+    if (cfg.searchPlaceholder !== undefined) searchPlaceholder.value = cfg.searchPlaceholder
+    if (cfg.extensionLabel !== undefined) extensionLabel.value = cfg.extensionLabel
     updateWelcomeMessage(cfg.userName || 'Hsu Phang', cfg.welcomeMessage)
     if (cfg.navItems?.length) navItems.value = cfg.navItems
     if (cfg.sections?.length) sections.value = cfg.sections
@@ -116,11 +118,14 @@ onMounted(async () => {
     const items = sessionsRes.value.data
     recentItems.value = items.length
       ? items.map(s => ({ id: s.id, title: s.title }))
-      : getDefaultRecentItems()
+      : []
   } else {
-    recentItems.value = getDefaultRecentItems()
+    recentItems.value = []
   }
-})
+}
+
+// ===== 初始化：从后端加载数据 =====
+onMounted(loadUserData)
 
 function getDefaultRecentItems() {
   return [
@@ -146,6 +151,7 @@ function handleNavigate(item) {
 }
 
 async function handleSelectRecent(item) {
+  loadingRecent.value = true
   try {
     const res = await getChatHistory(item.id)
     if (res?.data) {
@@ -157,6 +163,8 @@ async function handleSelectRecent(item) {
     }
   } catch (e) {
     console.warn('加载会话历史失败:', e)
+  } finally {
+    loadingRecent.value = false
   }
 }
 
@@ -166,9 +174,9 @@ async function handleSubmit(query) {
   // 添加用户消息
   messages.value.push({ role: 'user', content: query })
 
-  // 添加占位的 AI 消息（将用于打字机效果）
-  const aiMsg = { role: 'assistant', content: '', streaming: true }
-  messages.value.push(aiMsg)
+  // 添加占位的 AI 消息（显示"思考中..."，用于打字机效果）
+  const aiIndex = messages.value.length
+  messages.value.push({ role: 'assistant', content: '思考中...', streaming: true })
 
   try {
     const res = await sendChatMessage(query, {
@@ -177,25 +185,36 @@ async function handleSubmit(query) {
     })
     currentSessionId.value = res.session_id
 
-    // 将 AI 回复填入消息
-    aiMsg.content = res.answer
-    
-    // 等打字机效果结束后关闭 streaming
-    const totalLen = res.answer.length
-    const typeDelay = totalLen * 40 // 估计打字机完成时间 ≈ 字符数 × 30ms
-    setTimeout(() => {
-      aiMsg.streaming = false
-    }, Math.min(typeDelay, 8000)) // 最多等 8 秒
-
-    // 刷新最近会话列表
-    const sessionsRes = await getRecentSessions()
-    if (sessionsRes?.data) {
-      recentItems.value = sessionsRes.data.map(s => ({ id: s.id, title: s.title }))
+    // 通过数组索引更新，确保 Vue 响应式系统能检测到变化
+    messages.value[aiIndex] = {
+      role: 'assistant',
+      content: res.answer,
+      streaming: true,
     }
+
+    // 打字机效果结束后关闭 streaming
+    const totalLen = res.answer.length
+    const typeDelay = totalLen * 40 + 500
+    setTimeout(() => {
+      const msg = messages.value[aiIndex]
+      if (msg) msg.streaming = false
+    }, Math.min(typeDelay, 10000))
+
+    // 防抖刷新最近会话列表（2秒内只执行最后一次）
+    if (refreshTimer) clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(async () => {
+      const sessionsRes = await getRecentSessions()
+      if (sessionsRes?.data) {
+        recentItems.value = sessionsRes.data.map(s => ({ id: s.id, title: s.title }))
+      }
+    }, 2000)
   } catch (e) {
     console.warn('请求失败:', e)
-    aiMsg.content = '抱歉，请求失败，请稍后重试。'
-    aiMsg.streaming = false
+    messages.value[aiIndex] = {
+      role: 'assistant',
+      content: '抱歉，请求失败，请稍后重试。',
+      streaming: false,
+    }
   }
 }
 
@@ -204,7 +223,8 @@ function handleLogout() {
 }
 
 function handleLoginSuccess() {
-  // 登录成功后可以重新加载数据
+  // 登录成功后重新加载用户配置和会话列表
+  loadUserData()
 }
 
 const currentModel = ref('DeepSeek-V4-Flash')

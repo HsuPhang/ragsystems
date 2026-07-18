@@ -59,3 +59,15 @@ def get_current_admin(
     if not admin:
         raise HTTPException(status_code=401, detail="管理员不存在")
     return admin
+
+
+def get_current_admin_or_none(
+    token: Annotated[str | None, Depends(oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Admin | None:
+    if not token:
+        return None
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        return None
+    return db.query(Admin).filter(Admin.username == payload["sub"]).first()

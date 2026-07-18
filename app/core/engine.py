@@ -24,7 +24,14 @@ from llama_index.core.llms import ChatMessage
 
 from app.config import settings
 from app.core.llm import chat as llm_chat
-from app.core.prompt import SYSTEM_PROMPT, build_user_prompt
+from app.core.prompt import (
+    SYSTEM_PROMPT_BASE,
+    build_rejected_prompt,
+    build_system_prompt,
+    build_user_prompt,
+    detect_emergency,
+    is_non_medical,
+)
 from app.core.reranker import rerank
 from app.core.retriever import RetrievalResult, retrieve
 from app.utils import logger
@@ -90,10 +97,37 @@ def answer(
     use_rerank: bool = False,
     top_k: int | None = None,
     filters: dict[str, Any] | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> QAResult:
-    """主入口：接收 query，返回 QAResult。"""
+    """主入口：接收 query，返回 QAResult。
+    
+    Args:
+        query: 用户问题
+        use_rerank: 是否使用 reranker 重排
+        top_k: 检索数量
+        filters: 过滤条件
+        conversation_history: 历史对话（用于多轮追问）
+    
+    TODO: 当前为同步调用，等待 LLM 完整响应后一次性返回。
+          后续应实现 async generator 流式输出（stream_answer），
+          使前端能够逐 token 展示，减少用户等待感。
+    """
     if not query or not query.strip():
         return QAResult(answer="问题不能为空")
+
+    # 紧急情况检测（优先处理）
+    if detect_emergency(query):
+        return QAResult(
+            answer="【紧急提示】您描述的症状可能属于紧急情况，请立即拨打 120 急救电话或前往最近的医院急诊科就诊！切勿延误！",
+            rejected=True,
+        )
+    
+    # 非医疗问题检测
+    if is_non_medical(query):
+        return QAResult(
+            answer="抱歉，我是医疗科普助手，仅能回答与医学、健康、疾病预防相关的问题。您的问题超出我的专业范围，请咨询相关领域的专家。",
+            rejected=True,
+        )
 
     # ① Top-K 检索
     result: RetrievalResult = retrieve(query, top_k=top_k, filters=filters)
@@ -113,16 +147,16 @@ def answer(
             result = rerank(query, result)
         except Exception as e:
             logger.warning(f"Reranker 重排失败，已跳过: {e}")
-            # 保持原始检索结果继续执行
 
     # ④ 构造 Prompt
     contexts = _format_contexts(result.nodes)
-    user_prompt = build_user_prompt(query, contexts)
+    system_prompt = build_system_prompt(query)
+    user_prompt = build_user_prompt(query, contexts, conversation_history)
 
     # ⑤ LLM 生成
     try:
         answer_text = llm_chat([
-            ChatMessage(role="system", content=SYSTEM_PROMPT),
+            ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=user_prompt),
         ])
     except Exception as e:

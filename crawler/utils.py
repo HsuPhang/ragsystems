@@ -17,36 +17,41 @@ DEFAULT_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Referer": "https://www.nhc.gov.cn/",
 }
 
 _WS_RE = re.compile(r"\s+")
 
 
 def fetch(url: str, timeout: float = 20.0, retries: int = 3) -> str | None:
-    """带重试的 GET。"""
-    for i in range(retries):
-        try:
-            with httpx.Client(
-                headers=DEFAULT_HEADERS, timeout=timeout, follow_redirects=True
-            ) as cli:
+    """带重试的 GET。仅对 5xx 和网络错误重试。"""
+    with httpx.Client(
+        headers=DEFAULT_HEADERS, timeout=timeout, follow_redirects=True
+    ) as cli:
+        for i in range(retries):
+            try:
                 r = cli.get(url)
+                # 4xx 错误不重试（不会成功）
+                if 400 <= r.status_code < 500:
+                    print(f"  [skip] {url}: HTTP {r.status_code}")
+                    return None
                 r.raise_for_status()
                 # 卫健委部分页 GBK，需要按编码尝试
                 for enc in (r.encoding, "utf-8", "gbk", "gb2312"):
                     if not enc:
                         continue
                     try:
-                        html = r.content.decode(enc, errors="ignore")
-                        if "�" not in html and "ä¸" not in html:
-                            return html
-                    except LookupError:
+                        return r.content.decode(enc)
+                    except (UnicodeDecodeError, LookupError):
                         continue
-                return r.text
-        except Exception as e:
-            print(f"  [retry {i+1}/{retries}] {url}: {e}")
-            time.sleep(2 + i)
-    return None
+                # 最后手段：使用 replacement 字符解码
+                return r.content.decode("utf-8", errors="replace")
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError) as e:
+                if i < retries - 1:
+                    print(f"  [retry {i+1}/{retries}] {url}: {e}")
+                    time.sleep(2 + i)
+                else:
+                    print(f"  [fail] {url}: {e}")
+                    return None
 
 
 def parse_html(html: str) -> BeautifulSoup:
@@ -63,7 +68,7 @@ def save_text(path: Path, text: str) -> None:
 
 
 def url_to_filename(url: str, ext: str = "txt") -> str:
-    h = hashlib.md5(url.encode("utf-8")).hexdigest()[:12]
+    h = hashlib.md5(url.encode("utf-8")).hexdigest()[:16]
     safe = re.sub(r"[^a-zA-Z0-9_-]", "_", url)[:40].strip("_") or "page"
     return f"{safe}_{h}.{ext}"
 
@@ -92,7 +97,10 @@ def extract_main_text(html: str) -> str:
     if container is None:
         container = soup.body or soup
 
-    paras = [p.get_text(" ", strip=True) for p in container.find_all(["p", "div", "span"])]
+    paras = [p.get_text(" ", strip=True) for p in container.find_all(["p"])]
+    # 仅当没有 p 标签时，才回退到直接子级的 div/span
+    if not paras:
+        paras = [t.get_text(" ", strip=True) for t in container.find_all(["div", "span"], recursive=False)]
     text = "\n".join(p for p in paras if len(p) >= 8)
     text = normalize_space(text)
     return text

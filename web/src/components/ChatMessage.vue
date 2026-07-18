@@ -2,7 +2,12 @@
   <div class="chat-message" :class="{ 'is-user': message.role === 'user' }">
     <div class="bubble" :class="{ 'is-user': message.role === 'user', 'is-ai': message.role === 'assistant' }">
       <div v-if="message.role === 'user'" class="bubble-content">{{ message.content }}</div>
-      <div v-else class="bubble-content markdown-body" v-html="renderedContent"></div>
+      <div v-else-if="isLoading" class="bubble-content loading-indicator">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      <div v-else class="bubble-content markdown-body" v-html="displayHtml"></div>
     </div>
   </div>
 </template>
@@ -10,6 +15,7 @@
 <script setup>
 import { ref, watch, computed, onUnmounted } from 'vue'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -19,17 +25,42 @@ const props = defineProps({
 const displayedText = ref('')
 let typewriterTimer = null
 
-const renderedContent = computed(() => {
-  const text = displayedText.value
-  if (!text) return ''
-  return marked.parse(text, { breaks: true, gfm: true })
+// 判断是否为"思考中..."加载状态
+const isLoading = computed(() => {
+  return props.message.role === 'assistant'
+    && props.streaming
+    && (!props.message.content || props.message.content === '思考中...')
 })
+
+// Fully rendered markdown from complete content (only recomputes when full content changes, not during typewriter)
+const finalRenderedContent = computed(() => {
+  const text = props.message.content
+  if (!text) return ''
+  return DOMPurify.sanitize(marked.parse(text, { breaks: true, gfm: true }))
+})
+
+// Display HTML: during typewriter, show plain escaped text; when done, show rendered + sanitized markdown
+const displayHtml = computed(() => {
+  if (props.streaming) {
+    return escapeHtml(displayedText.value)
+  }
+  return finalRenderedContent.value
+})
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
 
 // 打字机效果：逐字显示
 watch(
   () => props.message.content,
   (newContent) => {
-    if (!newContent || !props.streaming) {
+    // Clear previous typewriter timer to prevent stale closures appending old content
+    if (typewriterTimer) clearTimeout(typewriterTimer)
+
+    if (!newContent || !props.streaming || newContent === '思考中...') {
       displayedText.value = newContent || ''
       return
     }
@@ -46,6 +77,16 @@ watch(
     tick()
   },
   { immediate: true }
+)
+
+// 监控 streaming 变化：如果 streaming 关闭且内容已经完整，直接显示全部
+watch(
+  () => props.streaming,
+  (isStreaming) => {
+    if (!isStreaming && props.message.content) {
+      displayedText.value = props.message.content
+    }
+  }
 )
 
 onUnmounted(() => {
@@ -168,5 +209,39 @@ onUnmounted(() => {
   border: none;
   border-top: 1px solid #d1d5db;
   margin: 12px 0;
+}
+
+/* -- 加载思考动画 -- */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #93c5fd;
+  animation: loadingPulse 1.4s infinite ease-in-out both;
+}
+.loading-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes loadingPulse {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>

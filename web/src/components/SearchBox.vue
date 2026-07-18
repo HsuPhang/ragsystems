@@ -10,9 +10,9 @@
         :placeholder="placeholder"
         :value="modelValue"
         @input="$emit('update:modelValue', $event.target.value)"
-        @keydown.enter="$emit('submit', modelValue)"
+        @keydown.enter="$emit('submit', $event.target.value)"
       />
-      <div class="search-extension" @click="toggleModel" :title="'点击切换为' + nextModelLabel">
+      <div class="search-extension" @click="toggleModel" :title="'点击切换为 ' + nextModelLabel">
         {{ currentModel }}
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </div>

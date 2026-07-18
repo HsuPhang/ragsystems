@@ -19,15 +19,19 @@ def main() -> None:
     print("▶ 创建表结构…")
     init_db()
     print("▶ 创建默认管理员…")
+    created = False
     with session_scope() as s:
         if not s.query(Admin).filter(Admin.username == settings.ADMIN_USERNAME).first():
             s.add(Admin(
                 username=settings.ADMIN_USERNAME,
                 password_hash=hash_password(settings.ADMIN_PASSWORD),
             ))
-            print(f"  已创建默认管理员: {settings.ADMIN_USERNAME} / {settings.ADMIN_PASSWORD}")
+            created = True
         else:
             print(f"  管理员 {settings.ADMIN_USERNAME} 已存在，跳过")
+    # 仅在 session_scope 成功提交（退出 with 块）后打印成功消息
+    if created:
+        print(f"  已创建默认管理员: {settings.ADMIN_USERNAME}")
     print("✔ MySQL 初始化完成")
 
 

@@ -1,4 +1,4 @@
-"""聊天接口：/api/chat  公开访问，不要求登录。"""
+"""聊天接口：/api/chat  登录用户方可使用。"""
 from __future__ import annotations
 
 from typing import Annotated
@@ -6,22 +6,28 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_admin
 from app.api.schemas import ChatRequest, ChatResponse, GenericResponse
 from app.core.engine import answer as engine_answer
-from app.db import ChatMessage, ChatSession, get_db
+from app.db import Admin, ChatMessage, ChatSession, get_db
 from app.utils import gen_id, logger
 
 router = APIRouter(prefix="/api/chat", tags=["聊天"])
 
 
 @router.post("", response_model=ChatResponse)
-def chat(req: ChatRequest, db: Annotated[Session, Depends(get_db)]) -> ChatResponse:
+def chat(
+    req: ChatRequest,
+    admin: Annotated[Admin, Depends(get_current_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ChatResponse:
     """处理一次问答请求，并落库。"""
     # 1. 会话
     session_id = req.session_id or gen_id("sess")
     if not db.query(ChatSession).filter(ChatSession.session_id == session_id).first():
         sess = ChatSession(
             session_id=session_id,
+            user_id=admin.id,
             title=req.query[:30] + ("…" if len(req.query) > 30 else ""),
         )
         db.add(sess)
@@ -66,8 +72,18 @@ def chat(req: ChatRequest, db: Annotated[Session, Depends(get_db)]) -> ChatRespo
 
 
 @router.get("/history/{session_id}", response_model=GenericResponse)
-def history(session_id: str, db: Annotated[Session, Depends(get_db)]) -> GenericResponse:
-    """获取某次会话历史。"""
+def history(
+    session_id: str,
+    admin: Annotated[Admin, Depends(get_current_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GenericResponse:
+    """获取当前用户的某次会话历史。"""
+    sess = db.query(ChatSession).filter(
+        ChatSession.session_id == session_id,
+        ChatSession.user_id == admin.id,
+    ).first()
+    if not sess:
+        return GenericResponse(data=[])
     rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.session_id == session_id)

@@ -5,24 +5,39 @@ function getToken() {
 }
 
 async function request(url, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...options.headers }
-  const t = getToken()
-  if (t) headers['Authorization'] = `Bearer ${t}`
+  const { auth = true, ...fetchOptions } = options
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-  const res = await fetch(`${API_BASE}${url}`, {
-    headers,
-    ...options,
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    if (res.status === 401) {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('auth_username')
-      window.location.reload()
-    }
-    throw new Error(`API ${res.status}: ${text}`)
+  const headers = { 'Content-Type': 'application/json', ...fetchOptions.headers }
+  if (auth) {
+    const t = getToken()
+    if (t) headers['Authorization'] = `Bearer ${t}`
   }
-  return res.json()
+
+  try {
+    const res = await fetch(`${API_BASE}${url}`, {
+      headers,
+      signal: controller.signal,
+      ...fetchOptions,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      if (res.status === 401) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_username')
+        if (window.location.pathname === '/') {
+          return { success: false, message: '未登录' }
+        }
+        window.location.href = '/'
+        return
+      }
+      throw new Error(`API ${res.status}: ${text}`)
+    }
+    return res.json()
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 // ===== 认证 =====
@@ -30,6 +45,7 @@ export function login(username, password) {
   return request('/admin/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+    auth: false,
   })
 }
 
@@ -37,6 +53,7 @@ export function register(username, password) {
   return request('/admin/register', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+    auth: false,
   })
 }
 

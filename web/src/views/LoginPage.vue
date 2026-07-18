@@ -1,3 +1,4 @@
+<!-- 未使用的登录页面，当前未注册到路由中，后续可删除或接入路由 -->
 <template>
   <div class="min-h-screen flex items-center justify-center">
     <div class="max-w-sm w-full mx-4">

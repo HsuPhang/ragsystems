@@ -45,7 +45,7 @@
 
     <!-- ===== 登录弹窗 ===== -->
     <div class="modal-overlay" :class="{ show: modalOpen }" @click="closeOnOverlay">
-      <div class="modal" @click.stop>
+      <div class="modal" @click.stop @keydown="trapFocus">
         <!-- 关闭按钮 -->
         <button class="modal-close" @click="closeModal" aria-label="关闭">
           <svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -76,15 +76,15 @@
           <!-- 登录表单 -->
           <form v-if="activeTab === 'login'" @submit.prevent="handleLogin">
             <div class="form-group">
-              <label class="form-label">用户名</label>
-              <input v-model="loginForm.username" type="text" class="form-input" placeholder="请输入用户名" required />
+              <label class="form-label" for="login-username">用户名</label>
+              <input id="login-username" ref="loginUsernameInput" v-model="loginForm.username" type="text" class="form-input" placeholder="请输入用户名" required />
             </div>
             <div class="form-group">
-              <label class="form-label">密码</label>
-              <input v-model="loginForm.password" type="password" class="form-input" placeholder="请输入密码" required />
+              <label class="form-label" for="login-password">密码</label>
+              <input id="login-password" v-model="loginForm.password" type="password" class="form-input" placeholder="请输入密码" required />
             </div>
             <div v-if="loginError" class="form-error">{{ loginError }}</div>
-            <button type="submit" class="btn-submit" :disabled="loginLoading">
+            <button type="submit" class="btn-submit" :disabled="loginLoading || !loginForm.username || !loginForm.password">
               {{ loginLoading ? '登录中...' : '登 录' }}
             </button>
           </form>
@@ -92,15 +92,17 @@
           <!-- 注册表单 -->
           <form v-else @submit.prevent="handleRegister">
             <div class="form-group">
-              <label class="form-label">用户名</label>
-              <input v-model="regForm.username" type="text" class="form-input" placeholder="请设置用户名" required />
+              <label class="form-label" for="reg-username">用户名</label>
+              <input id="reg-username" v-model="regForm.username" type="text" class="form-input" placeholder="请设置用户名" required />
             </div>
             <div class="form-group">
-              <label class="form-label">密码</label>
-              <input v-model="regForm.password" type="password" class="form-input" placeholder="至少6位密码" minlength="6" required />
+              <label class="form-label" for="reg-password">密码</label>
+              <input id="reg-password" v-model="regForm.password" type="password" class="form-input" placeholder="至少6位密码" minlength="6" required />
             </div>
             <div v-if="regError" class="form-error">{{ regError }}</div>
-            <button type="submit" class="btn-submit">注 册</button>
+            <button type="submit" class="btn-submit" :disabled="regLoading">
+              {{ regLoading ? '注册中...' : '注 册' }}
+            </button>
           </form>
         </div>
       </div>
@@ -137,14 +139,19 @@ const regError = ref('')
 const loginForm = ref({ username: '', password: '' })
 const regForm = ref({ username: '', password: '' })
 const chatContainer = ref(null)
+const loginUsernameInput = ref(null)
+const regLoading = ref(false)
 
-// 自动滚动到底部
-watch(() => props.messages?.length, async () => {
-  await nextTick()
-  if (chatContainer.value) {
-    chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+// 自动滚动到底部（监听最后一条消息内容变化，支持打字机效果）
+watch(
+  () => props.messages?.length ? props.messages[props.messages.length - 1].content : '',
+  async () => {
+    await nextTick()
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
   }
-})
+)
 
 const userInitial = computed(() => props.userName.charAt(0).toUpperCase())
 
@@ -163,6 +170,9 @@ function openModal() {
   regError.value = ''
   loginForm.value = { username: '', password: '' }
   regForm.value = { username: '', password: '' }
+  nextTick(() => {
+    loginUsernameInput.value?.focus()
+  })
 }
 
 function closeModal() {
@@ -171,6 +181,22 @@ function closeModal() {
 
 function closeOnOverlay(e) {
   if (e.target.classList.contains('modal-overlay')) closeModal()
+}
+
+function trapFocus(e) {
+  if (e.key !== 'Tab') return
+  const modal = e.currentTarget
+  const focusable = modal.querySelectorAll('input, button, [tabindex]:not([tabindex="-1"])')
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
 }
 
 async function handleLogin() {
@@ -188,9 +214,11 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
+  regLoading.value = true
   regError.value = ''
   if (!regForm.value.username || regForm.value.password.length < 6) {
     regError.value = '用户名不能为空，密码至少6位'
+    regLoading.value = false
     return
   }
   try {
@@ -203,6 +231,8 @@ async function handleRegister() {
     if (msg.includes('409')) regError.value = '用户名已存在'
     else if (msg.includes('400')) regError.value = '用户名或密码格式不正确'
     else regError.value = '注册失败，请检查网络'
+  } finally {
+    regLoading.value = false
   }
 }
 </script>
@@ -287,15 +317,15 @@ async function handleRegister() {
   cursor: default;
 }
 
-/* -- 居中欢迎区 -- */
+/* -- 居中欢迎区 / 聊天区 -- */
 .main-center {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 0 16px 40px 16px;
-  margin-top: -40px;
 }
 
 .welcome-title {
@@ -525,17 +555,40 @@ async function handleRegister() {
 /* -- 聊天容器 -- */
 .chat-container {
   flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: 800px;
   overflow-y: auto;
-  padding: 0 16px 16px;
-  margin-bottom: 16px;
+  padding: 16px 16px 16px;
+  margin-bottom: 12px;
+  scroll-behavior: smooth;
 }
 
-/* 调整有消息时的布局 */
+/* 美化的滚动条 */
+.chat-container::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-container::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+.chat-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.4);
+}
+/* Firefox */
+.chat-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
+}
+
+/* 当有聊天消息时，改用 flex-start 布局 */
 .main-center:has(.chat-container) {
   justify-content: flex-start;
-  padding-top: 16px;
+  padding-top: 0;
 }
 .main-center:has(.chat-container) .welcome-title {
   display: none;

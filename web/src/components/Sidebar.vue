@@ -38,52 +38,49 @@
 
     <!-- 导航 -->
     <nav class="sidebar-nav">
-      <a
+      <button
         v-for="item in navItems"
         :key="item.label"
-        href="#"
         class="nav-item"
-        @click.prevent="$emit('navigate', item)"
+        @click="$emit('navigate', item)"
       >
         <img :src="`/asset/${item.icon}`" class="asset-icon-sm" :alt="item.label" />
         <span>{{ item.label }}</span>
-      </a>
+      </button>
     </nav>
 
     <!-- 分区标题 + 子导航 -->
     <template v-for="section in sections" :key="section.title">
       <div class="section-title">{{ section.title }}</div>
       <nav class="sidebar-nav">
-        <a
+        <button
           v-for="item in section.items"
           :key="item.label"
-          href="#"
           class="nav-item"
-          @click.prevent="$emit('navigate', item)"
+          @click="$emit('navigate', item)"
         >
           <img :src="`/asset/${item.icon}`" class="asset-icon-sm" :alt="item.label" />
           <span>{{ item.label }}</span>
-        </a>
+        </button>
       </nav>
     </template>
 
     <!-- 最近 -->
     <div class="section-title">最近</div>
     <div class="sidebar-recent no-scrollbar">
-      <a
+      <button
         v-for="item in recentItems"
         :key="item.id"
-        href="#"
         class="recent-item"
-        @click.prevent="$emit('select-recent', item)"
+        @click="$emit('select-recent', item)"
       >
         {{ item.title }}
-      </a>
+      </button>
     </div>
 
     <!-- 底部用户 -->
     <footer class="sidebar-footer">
-      <div class="user-profile" @click="toggleUserMenu">
+      <div class="user-profile" @click="toggleUserMenu" :aria-haspopup="true" :aria-expanded="userMenuOpen">
         <div class="user-avatar">{{ userInitial }}</div>
         <span class="user-name">{{ userName }}</span>
         <span class="user-menu" :class="{ active: userMenuOpen }">
@@ -91,8 +88,8 @@
         </span>
       </div>
       <!-- 用户菜单下拉 -->
-      <div v-if="userMenuOpen" class="user-dropdown" @click.stop>
-        <button class="dropdown-item" @click="handleLogout">
+      <div v-if="userMenuOpen" class="user-dropdown" @click.stop role="menu">
+        <button class="dropdown-item" @click="handleLogout" role="menuitem">
           <img src="/asset/rectangle.portrait.and.arrow.right.svg" class="asset-icon" alt="退出"  />
             退出登录
         </button>
@@ -286,6 +283,12 @@ onUnmounted(() => {
   transition: all 0.2s ease;
   overflow: hidden;
   white-space: nowrap;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 .nav-item:hover {
   background: rgba(0, 0, 0, 0.04);
@@ -321,6 +324,12 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: background 0.2s;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 .recent-item:hover {
   background: rgba(0, 0, 0, 0.04);

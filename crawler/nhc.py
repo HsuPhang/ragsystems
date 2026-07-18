@@ -1,10 +1,16 @@
 """国家卫生健康委员会 (nhc.gov.cn) 科普文章爬虫。
 
-爬取目标：
+[重要提示]
+   NHC 网站目前部署了 WAF（Web 应用防火墙），对大部分路径返回 HTTP 412，
+   普通 HTTP 请求（含 httpx、cloudscraper）无法绕过。
+   如需爬取 NHC 数据，建议使用 Selenium/Playwright 等浏览器自动化工具，
+   或通过 NHC 官方提供的 RSS/API 接口获取。
+
+爬取目标（当 WAF 可用时）：
 - 科普知识栏目
 - 健康知识 / 卫生科普 / 公众健康等子栏目
 
-输出：data/raw/nhc/<分类>/<文章标题>.txt
+输出：data/raw/nhc/<分类>/<文章>.txt
 """
 from __future__ import annotations
 
@@ -12,6 +18,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -43,24 +50,50 @@ MAX_PAGES_PER_ENTRY = 5
 MAX_ARTICLES_PER_ENTRY = 30
 
 
-def discover_article_links(entry_url: str) -> list[str]:
-    """在列表页发现文章链接。"""
-    html = fetch(entry_url)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "lxml")
-    links = set()
-    for a in soup.select("a[href]"):
-        href = str(a.get("href", ""))
-        if not href:
+def discover_article_links(
+    entry_url: str, max_pages: int = MAX_PAGES_PER_ENTRY
+) -> list[str]:
+    """在列表页发现文章链接（支持分页）。"""
+    all_links: set[str] = set()
+
+    for page in range(max_pages):
+        if page == 0:
+            url = entry_url
+        else:
+            # 分页格式: list.shtml → list_2.shtml, list_3.shtml ...
+            url = re.sub(r"(\.[^.]+)$", f"_{page + 1}\\1", entry_url)
+
+        html = fetch(url)
+        if not html:
+            if page > 0:
+                break
             continue
-        # 卫健委文章 URL 通常形如 /wjw/jkp/yyyymmdd/xxx.shtml
-        if re.search(r"/\d{8}/[a-z0-9]+\.shtml", href):
-            if href.startswith("http"):
-                links.add(href)
-            elif href.startswith("/"):
-                links.add("https://www.nhc.gov.cn" + href)
-    return list(links)
+
+        soup = BeautifulSoup(html, "lxml")
+        found = 0
+        for a in soup.select("a[href]"):
+            href = str(a.get("href", ""))
+            if not href:
+                continue
+            # 卫健委文章 URL 通常形如 /wjw/jkp/yyyymmdd/xxx.shtml
+            if re.search(r"/\d{8}/[a-z0-9]+\.shtml", href):
+                if href.startswith("http"):
+                    if href not in all_links:
+                        all_links.add(href)
+                        found += 1
+                elif href.startswith("/"):
+                    full = urljoin(entry_url, href)
+                    if full not in all_links:
+                        all_links.add(full)
+                        found += 1
+
+        if found == 0:
+            print(f"  第 {page+1} 页无更多文章，停止翻页")
+            break
+
+        polite_sleep(1.0)
+
+    return list(all_links)
 
 
 def fetch_article(url: str, out_dir: Path) -> dict | None:

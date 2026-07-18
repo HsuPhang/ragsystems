@@ -21,13 +21,26 @@ from app.utils import logger
 # 文档级别的元数据字段（每篇文档必带，便于检索时过滤）
 DOC_META_KEYS = ("source", "category", "author", "update_time", "keywords", "url")
 
+# 用于标记被展平的 list 类型值，保证可逆
+LIST_PREFIX = "__list__"
+
 
 def _flatten_meta(meta: dict) -> dict:
-    """把 metadata 中的 list/tuple 转成逗号分隔字符串（Chroma 不支持非标量类型）。"""
-    return {
-        k: ", ".join(str(x) for x in v) if isinstance(v, (list, tuple)) else v
-        for k, v in meta.items()
-    }
+    """把 metadata 中的 list/tuple 转成带前缀的逗号分隔字符串（Chroma 不支持非标量类型）。"""
+    def _flatten(v):
+        if isinstance(v, (list, tuple)):
+            return LIST_PREFIX + ",".join(str(x) for x in v)
+        return v
+    return {k: _flatten(v) for k, v in meta.items()}
+
+
+def _unflatten_meta(meta: dict) -> dict:
+    """从 Chroma 读取后，恢复 list 字段。"""
+    def _unflatten(v):
+        if isinstance(v, str) and v.startswith(LIST_PREFIX):
+            return v[len(LIST_PREFIX):].split(",")
+        return v
+    return {k: _unflatten(v) for k, v in meta.items()}
 
 
 def _normalize_doc_metadata(doc: Document) -> Document:

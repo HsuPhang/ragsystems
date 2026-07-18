@@ -31,14 +31,24 @@ ENTRY_URLS = [
     "https://www.cnsoc.org/populization/",
     "https://www.cnsoc.org/populization/index.html",
     # 卫健委 - 国民营养计划
-    "https://www.nhc.gov.cn/yzygj/list.shtml",
+    "https://www.nhc.gov.cn/sps/list.shtml",
 ]
 
 OUT_ROOT = Path(__file__).resolve().parent.parent / "data" / "raw" / "dietary"
 MAX_PER_ENTRY = 25
 
 
-def discover_links(entry_url: str) -> list[str]:
+def _entry_to_category_name(entry_url: str) -> str:
+    """从入口 URL 提取可读的类别名称。"""
+    if "cnsoc.org" in entry_url:
+        return "中国营养学会"
+    elif "nhc.gov.cn" in entry_url:
+        return "国家卫生健康委员会"
+    return entry_url
+
+
+def discover_links_cnsoc(entry_url: str) -> list[str]:
+    """cnsoc.org 特定链接发现逻辑。"""
     html = fetch(entry_url)
     if not html:
         return []
@@ -47,10 +57,7 @@ def discover_links(entry_url: str) -> list[str]:
     for a in soup.select("a[href]"):
         href = str(a.get("href", ""))
         text = normalize_space(a.get_text())
-        # 只保留明显是文章页的链接（有标题文字 + 路径含 /20/ 年份）
-        if not text or len(text) < 4:
-            continue
-        if re.search(r"/(20\d{2})/", href) and re.search(r"\.html?$|/\d{4,}/", href):
+        if text and len(text) >= 4 and re.search(r"\.html?$", href):
             if href.startswith("http"):
                 links.add(href)
             elif href.startswith("/"):
@@ -58,6 +65,32 @@ def discover_links(entry_url: str) -> list[str]:
                 if base:
                     links.add(base.group(1) + href)
     return list(links)
+
+
+def discover_links_nhc(entry_url: str) -> list[str]:
+    """nhc.gov.cn 特定链接发现逻辑。"""
+    html = fetch(entry_url)
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "lxml")
+    links = set()
+    for a in soup.select("a[href]"):
+        href = str(a.get("href", ""))
+        if re.search(r"/\d{8}/[a-z0-9]+\.shtml", href):
+            if href.startswith("http"):
+                links.add(href)
+            elif href.startswith("/"):
+                links.add("https://www.nhc.gov.cn" + href)
+    return list(links)
+
+
+def discover_links(entry_url: str) -> list[str]:
+    """根据站点分发到专用的链接发现函数。"""
+    if "cnsoc.org" in entry_url:
+        return discover_links_cnsoc(entry_url)
+    elif "nhc.gov.cn" in entry_url:
+        return discover_links_nhc(entry_url)
+    return []
 
 
 def fetch_article(url: str, out_dir: Path, category: str) -> dict | None:
@@ -115,7 +148,7 @@ def main() -> None:
         out_dir = OUT_ROOT / sub_name
         for url in links[:MAX_PER_ENTRY]:
             try:
-                info = fetch_article(url, out_dir, category=entry)
+                info = fetch_article(url, out_dir, category=_entry_to_category_name(entry))
                 if info:
                     grand += 1
                     print(f"  ✔ {info['title'][:30]} ({info['length']}字)")
