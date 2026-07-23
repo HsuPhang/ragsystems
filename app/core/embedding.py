@@ -1,11 +1,18 @@
-"""Embedding 模块：加载 BAAI/bge-m3（推荐）或 bge-large-zh-v1.5。
+"""Embedding 模块：支持本地 BGE 模型和远程 text-embedding API。
 
-BGE-m3 特性：
-- 支持中文、英文、长文本（最大 8192 token）
-- 输出维度 1024
-- MTEB 中文榜单表现 SOTA
+支持两种模式：
+- local: 使用本地 BGE 模型（bge-small-zh-v1.5 / bge-large-zh-v1.5）
+- api: 使用 OpenAI 兼容的 text-embedding API
 
-注意：模型加载较重，使用惰性导入（非 @lru_cache 包装），避免启动时卡住。
+BGE 模型特性：
+- bge-small-zh-v1.5: 中文专用，输出维度 512，轻量快速
+- bge-large-zh-v1.5: 中文专用，输出维度 1024，效果更好
+
+text-embedding API 特性：
+- text-embedding-3-small: 输出维度 1536，支持多语言
+- text-embedding-3-large: 输出维度 3072，效果更好
+
+注意：模型加载较重，使用惰性导入，避免启动时卡住。
 """
 from __future__ import annotations
 
@@ -15,7 +22,7 @@ if TYPE_CHECKING:
     from llama_index.core.embeddings import BaseEmbedding
 
 from app.config import settings
-from app.utils import logger
+from app.utils import detect_device, logger
 
 _embed_model: "BaseEmbedding | None" = None
 
@@ -26,29 +33,47 @@ def get_embed_model() -> "BaseEmbedding":
     if _embed_model is not None:
         return _embed_model
 
-    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+    embed_type = settings.EMBEDDING_TYPE.lower()
 
-    logger.info(f"加载 Embedding 模型: {settings.EMBEDDING_MODEL_PATH} "
-                f"(device={settings.EMBEDDING_DEVICE})")
-    _embed_model = HuggingFaceEmbedding(
-        model_name=settings.EMBEDDING_MODEL_PATH,
-        device=settings.EMBEDDING_DEVICE,
-        embed_batch_size=8,
-        max_length=512,
-        normalize=True,
-    )
-    logger.info("Embedding 模型加载完成")
+    if embed_type == "api":
+        logger.info(f"使用远程 Embedding API: {settings.TEXT_EMBEDDING_MODEL}")
+        logger.info(f"API Base URL: {settings.OPENAI_BASE_URL}")
+        from llama_index.embeddings.openai import OpenAIEmbedding
+
+        _embed_model = OpenAIEmbedding(
+            model=settings.TEXT_EMBEDDING_MODEL,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_BASE_URL,
+            embed_batch_size=8,
+        )
+        logger.info("远程 Embedding API 配置完成")
+
+    else:
+        device = detect_device(settings.EMBEDDING_DEVICE)
+        logger.info(f"加载本地 Embedding 模型: {settings.EMBEDDING_MODEL_PATH} "
+                    f"(device={device})")
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+        _embed_model = HuggingFaceEmbedding(
+            model_name=settings.EMBEDDING_MODEL_PATH,
+            device=device,
+            embed_batch_size=8,
+            max_length=512,
+            normalize=True,
+        )
+        logger.info("本地 Embedding 模型加载完成")
+
     return _embed_model
-
-
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    """对文本列表生成向量（用于离线构建索引）。"""
-    model = get_embed_model()
-    return model.get_text_embedding_batch(texts)
 
 
 def embed_query(text: str) -> list[float]:
     """对单条 query 生成向量。"""
+    embed_type = settings.EMBEDDING_TYPE.lower()
+
+    if embed_type == "api":
+        model = get_embed_model()
+        return model.get_query_embedding(text)
+
     model_name = settings.EMBEDDING_MODEL_PATH.lower()
     if "bge-m3" in model_name:
         text_to_encode = text

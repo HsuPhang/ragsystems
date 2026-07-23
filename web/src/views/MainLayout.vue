@@ -10,8 +10,11 @@
     <Sidebar
       :visible="sidebarVisible"
       :is-mobile="isMobile"
+      :is-authenticated="isAuthenticated"
+      :is-dark="isDark"
       :app-name="appName"
       :user-name="userName"
+      :avatar="authAvatar"
       :shortcut-text="shortcutText"
       :nav-items="navItems"
       :sections="sections"
@@ -21,16 +24,24 @@
       @navigate="handleNavigate"
       @select-recent="handleSelectRecent"
       @logout="handleLogout"
+      @login="handleShowLogin"
+      @theme-change="toggleTheme"
+      @avatar-change="handleAvatarChange"
     />
 
     <!-- 主内容 -->
     <MainContent
+      ref="mainContentRef"
       :welcome-message="welcomeMessage"
       :search-placeholder="searchPlaceholder"
       :extension-label="extensionLabel"
       :is-authenticated="isAuthenticated"
+      :is-dark="isDark"
       :user-name="userName"
+      :avatar="authAvatar"
       :messages="messages"
+      :is-thinking="isThinking"
+      :loader-variant="currentLoaderVariant"
       @toggle-mobile="toggleMobile"
       @submit="handleSubmit"
       @login-success="handleLoginSuccess"
@@ -46,16 +57,20 @@ import SidebarToggle from '../components/SidebarToggle.vue'
 import MainContent from '../components/MainContent.vue'
 import { useSidebar } from '../composables/useSidebar.js'
 import { useAuth } from '../composables/useAuth.js'
-import { getSystemConfig, getRecentSessions, sendChatMessage, getChatHistory } from '../services/api.js'
+import { useTheme } from '../composables/useTheme.js'
+import { getSystemConfig, getRecentSessions, sendChatMessage, getChatHistory, uploadAvatar } from '../services/api.js'
 
-const { username: authUsername, isAuthenticated, logout } = useAuth()
+const { username: authUsername, avatar: authAvatar, isAuthenticated, logout, fetchProfile, setAvatar } = useAuth()
+const { isDark, toggleTheme } = useTheme()
+
+const mainContentRef = ref(null)
 
 // ===== 动态配置（从后端获取，失败时用默认值兜底） =====
-const appName = ref('Gemini')
-const userName = ref('Hsu Phang')
+const appName = ref('MedKnow')
+const userName = ref('Hello')
 const shortcutText = ref('Ctrl+Shift+O')
-const searchPlaceholder = ref('问问 Gemini')
-const extensionLabel = ref('Flash 扩展')
+const searchPlaceholder = ref('问问知康')
+const extensionLabel = ref('DeepSeek-V4-Flash')
 const navItems = ref([
   { label: '合集', icon: 'circle.grid.2x2.svg', route: '/collections' }
 ])
@@ -91,13 +106,16 @@ const {
 const currentSessionId = ref(null)
 const messages = ref([])
 const loadingRecent = ref(false)
+const isThinking = ref(false)
+const currentLoaderVariant = ref('rose')
 let refreshTimer = null
 
 // ===== 从后端加载用户配置和会话列表 =====
 async function loadUserData() {
-  const [configRes, sessionsRes] = await Promise.allSettled([
+  const [configRes, sessionsRes, profileRes] = await Promise.allSettled([
     getSystemConfig(),
     getRecentSessions(),
+    isAuthenticated.value ? fetchProfile() : Promise.resolve(),
   ])
 
   if (configRes.status === 'fulfilled' && configRes.value?.data) {
@@ -126,19 +144,6 @@ async function loadUserData() {
 
 // ===== 初始化：从后端加载数据 =====
 onMounted(loadUserData)
-
-function getDefaultRecentItems() {
-  return [
-    { id: '1', title: '仿ChatGPT UI界面代码分享' },
-    { id: '2', title: '大模型知识库系统前端设计方案' },
-    { id: '3', title: '高德地图 HTML 画圈示例' },
-    { id: '4', title: 'ArkUI 状态栏重叠问题解决' },
-    { id: '5', title: 'ArkUI 卡片遮挡标签栏的解决方案' },
-    { id: '6', title: 'ArkUI 代码 Bug 修复指南' },
-    { id: '7', title: 'ArkUI 沉浸式模糊过渡优化' },
-    { id: '8', title: 'ArkUI 错误修复指南' },
-  ]
-}
 
 // ===== 交互事件 =====
 function handleNewChat() {
@@ -174,9 +179,9 @@ async function handleSubmit(query) {
   // 添加用户消息
   messages.value.push({ role: 'user', content: query })
 
-  // 添加占位的 AI 消息（显示"思考中..."，用于打字机效果）
-  const aiIndex = messages.value.length
-  messages.value.push({ role: 'assistant', content: '思考中...', streaming: true })
+  // 显示思考动画（在气泡外部）
+  currentLoaderVariant.value = nextLoaderVariant()
+  isThinking.value = true
 
   try {
     const res = await sendChatMessage(query, {
@@ -185,12 +190,14 @@ async function handleSubmit(query) {
     })
     currentSessionId.value = res.session_id
 
-    // 通过数组索引更新，确保 Vue 响应式系统能检测到变化
-    messages.value[aiIndex] = {
+    // 思考结束，才出现 AI 气泡
+    isThinking.value = false
+    const aiIndex = messages.value.length
+    messages.value.push({
       role: 'assistant',
       content: res.answer,
       streaming: true,
-    }
+    })
 
     // 打字机效果结束后关闭 streaming
     const totalLen = res.answer.length
@@ -210,16 +217,25 @@ async function handleSubmit(query) {
     }, 2000)
   } catch (e) {
     console.warn('请求失败:', e)
-    messages.value[aiIndex] = {
+    isThinking.value = false
+    messages.value.push({
       role: 'assistant',
       content: '抱歉，请求失败，请稍后重试。',
       streaming: false,
-    }
+    })
   }
 }
 
 function handleLogout() {
   logout()
+  userName.value = 'User'
+  recentItems.value = []
+  currentSessionId.value = null
+  messages.value = []
+}
+
+function handleShowLogin() {
+  mainContentRef.value?.openModal()
 }
 
 function handleLoginSuccess() {
@@ -227,10 +243,31 @@ function handleLoginSuccess() {
   loadUserData()
 }
 
+async function handleAvatarChange(file) {
+  try {
+    const res = await uploadAvatar(file)
+    if (res?.data?.avatar) {
+      setAvatar(res.data.avatar)
+    }
+  } catch (e) {
+    console.error('上传头像失败:', e)
+    alert('上传头像失败，请重试')
+  }
+}
+
 const currentModel = ref('DeepSeek-V4-Flash')
 function handleModelChange(model) {
   currentModel.value = model
   console.log('切换模型:', model)
+}
+
+// 加载曲线类型轮换
+const loaderVariants = ['rose', 'original-thinking', 'lissajous', 'cardioid', 'hypotrochoid']
+let loaderIndex = 0
+function nextLoaderVariant() {
+  const v = loaderVariants[loaderIndex % loaderVariants.length]
+  loaderIndex++
+  return v
 }
 </script>
 
@@ -239,7 +276,7 @@ function handleModelChange(model) {
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(180deg, #ffffff 0%, #e8f2ff 50%, #dcebff 100%);
+  background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
 }
 .sidebar-mask {
   position: fixed;

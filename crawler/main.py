@@ -38,6 +38,11 @@ CRAWLERS = {
         "description": "健康中国(中国网) — 健康科普、资讯、中医养生",
         "available": True,
     },
+    "dietary": {
+        "module": "crawler.dietary",
+        "description": "国家膳食指南 — 营养膳食科普数据",
+        "available": True,
+    },
     "nhc": {
         "module": "crawler.nhc",
         "description": "国家卫生健康委员会 (WAF 拦截，需浏览器自动化)",

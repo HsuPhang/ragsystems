@@ -26,7 +26,6 @@ from app.config import settings
 from app.core.llm import chat as llm_chat
 from app.core.prompt import (
     SYSTEM_PROMPT_BASE,
-    build_rejected_prompt,
     build_system_prompt,
     build_user_prompt,
     detect_emergency,
@@ -45,15 +44,7 @@ class QAResult:
     top_score: float = 0.0
     used_rerank: bool = True
     rejected: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "answer": self.answer,
-            "sources": self.sources,
-            "top_score": round(self.top_score, 4),
-            "used_rerank": self.used_rerank,
-            "rejected": self.rejected,
-        }
+    low_relevance: bool = False  # 是否低相关度降级回答
 
 
 def _build_sources(nodes) -> list[dict]:
@@ -132,7 +123,7 @@ def answer(
     # ① Top-K 检索
     result: RetrievalResult = retrieve(query, top_k=top_k, filters=filters)
 
-    # ② 防幻觉拒答
+    # ② 防幻觉拒答（极低相关度）
     if result.rejected:
         return QAResult(
             answer=result.reject_reason
@@ -141,8 +132,8 @@ def answer(
             top_score=result.top_score,
         )
 
-    # ③ Reranker 重排
-    if use_rerank:
+    # ③ Reranker 重排（低相关度时跳过 rerank）
+    if use_rerank and not result.low_relevance:
         try:
             result = rerank(query, result)
         except Exception as e:
@@ -152,6 +143,7 @@ def answer(
     contexts = _format_contexts(result.nodes)
     system_prompt = build_system_prompt(query)
     user_prompt = build_user_prompt(query, contexts, conversation_history)
+    is_low_relevance = result.low_relevance
 
     # ⑤ LLM 生成
     try:
@@ -168,10 +160,14 @@ def answer(
             used_rerank=use_rerank,
         )
 
-    # ⑥ 返回
+    # ⑥ 返回（低相关度时添加标注）
+    if is_low_relevance:
+        answer_text = f"【提示】以下回答基于通用知识，非知识库内容，请谨慎参考：\n\n{answer_text}"
+
     return QAResult(
         answer=answer_text,
         sources=_build_sources(result.nodes),
         top_score=result.top_score,
         used_rerank=use_rerank,
+        low_relevance=is_low_relevance,
     )

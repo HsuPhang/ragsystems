@@ -9,7 +9,9 @@ async function request(url, options = {}) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-  const headers = { 'Content-Type': 'application/json', ...fetchOptions.headers }
+  // FormData 让浏览器自动设置 Content-Type（含 boundary）
+  const isFormData = fetchOptions.body instanceof FormData
+  const headers = { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...fetchOptions.headers }
   if (auth) {
     const t = getToken()
     if (t) headers['Authorization'] = `Bearer ${t}`
@@ -54,6 +56,20 @@ export function register(username, password) {
     method: 'POST',
     body: JSON.stringify({ username, password }),
     auth: false,
+  })
+}
+
+export function getProfile() {
+  return request('/admin/me')
+}
+
+export function uploadAvatar(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request('/admin/avatar', {
+    method: 'POST',
+    body: formData,
+    headers: {},
   })
 }
 

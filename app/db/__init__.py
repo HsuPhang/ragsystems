@@ -7,7 +7,6 @@ from app.db.models import (
     Document,
     SystemConfig,
     SystemLog,
-    User,
     create_database_if_not_exists,
     get_db,
     get_engine,
@@ -17,7 +16,7 @@ from app.db.models import (
 )
 
 __all__ = [
-    "Admin", "User", "Document", "ChatSession", "ChatMessage",
+    "Admin", "Document", "ChatSession", "ChatMessage",
     "SystemLog", "SystemConfig", "Base",
     "get_engine", "get_session_factory", "session_scope", "get_db",
     "init_db", "create_database_if_not_exists",

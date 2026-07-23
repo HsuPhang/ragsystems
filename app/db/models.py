@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generator
 
 from sqlalchemy import (
@@ -49,16 +49,8 @@ class Admin(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    nickname: Mapped[str] = mapped_column(String(64), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    avatar: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Document(Base):
@@ -77,9 +69,9 @@ class Document(Base):
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     keywords: Mapped[dict] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(16), default="active")  # active / deleted
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     update_time: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
 
@@ -90,7 +82,7 @@ class ChatSession(Base):
     session_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(255), default="新会话")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ChatMessage(Base):
@@ -103,7 +95,7 @@ class ChatMessage(Base):
     sources: Mapped[dict] = mapped_column(JSON, default=list)
     top_score: Mapped[float] = mapped_column(Float, default=0.0)
     rejected: Mapped[int] = mapped_column(Integer, default=0)  # 0/1
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class SystemLog(Base):
@@ -115,7 +107,7 @@ class SystemLog(Base):
     action: Mapped[str] = mapped_column(String(64), default="")
     message: Mapped[str] = mapped_column(Text, default="")
     operator: Mapped[str] = mapped_column(String(64), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class SystemConfig(Base):
