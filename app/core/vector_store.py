@@ -62,22 +62,17 @@ def add_nodes(nodes: list[BaseNode], embed_model=None) -> list[str]:
         embed_model=embed_model,
     )
 
-    # 去重：相同 chunk_id / source+文本 跳过
+    before_count = count()
     ids = index.insert_nodes(nodes, show_progress=True)
-    logger.info(f"已写入 {len(ids)} 条 chunk 到 Chroma (collection={COLLECTION_NAME})")
-    return ids
+    after_count = count()
+    inserted_count = after_count - before_count
 
-
-def build_index_from_dir(input_dir: str | Path) -> int:
-    """从数据目录构建索引（一次性脚本入口）。"""
-    from app.core.preprocess import build_nodes_from_dir
-
-    nodes = build_nodes_from_dir(input_dir)
-    if not nodes:
-        logger.warning("没有可用的 chunk，索引未更新")
-        return 0
-    add_nodes(nodes)
-    return len(nodes)
+    if ids is not None:
+        logger.info(f"已写入 {len(ids)} 条 chunk 到 Chroma (collection={COLLECTION_NAME})")
+        return ids
+    else:
+        logger.info(f"已写入 {inserted_count} 条 chunk 到 Chroma (collection={COLLECTION_NAME})")
+        return []
 
 
 def get_index() -> VectorStoreIndex:
@@ -104,25 +99,14 @@ def delete_by_doc_id(doc_id: str) -> int:
     return len(ids)
 
 
-def delete_by_chunk_id(chunk_id: str) -> int:
-    """按 chunk_id 单条删除。"""
-    client = get_chroma_client()
-    collection = client.get_collection(COLLECTION_NAME)
-    res = collection.get(where={"chunk_id": chunk_id})
-    ids = res.get("ids", [])
-    if ids:
-        collection.delete(ids=ids)
-    return len(ids)
-
-
 def reset_collection() -> None:
     """清空集合（仅调试用）。"""
     client = get_chroma_client()
     try:
         client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
-    logger.warning(f"已重置 collection: {COLLECTION_NAME}")
+        logger.warning(f"已重置 collection: {COLLECTION_NAME}")
+    except Exception as e:
+        logger.warning(f"重置 collection 失败: {COLLECTION_NAME}, 错误: {e}")
 
 
 def count() -> int:

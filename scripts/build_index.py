@@ -3,8 +3,11 @@
 流程：
 1. 遍历 data/raw/ 下的所有 .txt 文件，解析元数据头
 2. 注册/更新每条文档到 MySQL documents 表
-3. 加载、分块、写入 Chroma
-4. 更新 documents 表的 chunk_count
+3. 加载、分块
+4. 将解析出的元数据（来源/URL/分类）注入到每个 Chroma chunk
+5. 剥离 chunk 正文中的冗余元数据头
+6. 写入 Chroma
+7. 更新 documents 表的 chunk_count
 """
 from __future__ import annotations
 
@@ -35,6 +38,19 @@ HEADER_PATTERN = re.compile(
     r"URL:\s*(?P<url>.+)\n"
     r"发布时间:\s*(?P<update_time>.+)\n"
     r"分类:\s*(?P<category>.+)\n"
+)
+
+# 匹配完整元数据头（含抓取时间 + 分隔线），用于剥离 chunk 正文
+HEADER_STRIP_PATTERN = re.compile(
+    r"标题:.*\r?\n"
+    r"来源:.*\r?\n"
+    r"URL:.*\r?\n"
+    r"发布时间:.*\r?\n"
+    r"分类:.*\r?\n"
+    r"(?:抓取时间:.*\r?\n)?"
+    r"\r?\n?"
+    r"-{10,}\s*",
+    re.MULTILINE,
 )
 
 
@@ -126,6 +142,40 @@ def register_documents(raw_dir: Path) -> dict[str, Path]:
         return {}
 
 
+def enrich_nodes_metadata(nodes: list) -> list:
+    """将 parse_txt_header 解析出的元数据注入到每个 node 上，并剥离正文中的元数据头。"""
+    # 缓存：file_path → parsed_meta，避免对同文件的不同 chunk 重复解析
+    meta_cache: dict[str, dict | None] = {}
+
+    for node in nodes:
+        fp = node.metadata.get("file_path", "")
+        if not fp:
+            continue
+
+        fp_resolved = str(Path(fp).resolve())
+        if fp_resolved not in meta_cache:
+            meta_cache[fp_resolved] = parse_txt_header(Path(fp))
+
+        meta = meta_cache[fp_resolved]
+        if meta:
+            # 注入解析出的元数据
+            node.metadata["source"] = meta["source"]
+            node.metadata["url"] = meta["url"]
+            node.metadata["category"] = meta["category"]
+            node.metadata["update_time"] = meta["update_time"]
+            # 同时设置 author 为来源（与 MySQL 注册保持一致）
+            node.metadata.setdefault("author", meta["source"])
+
+            # 剥离 chunk 正文中的元数据头
+            text = node.get_content()
+            if text:
+                cleaned = HEADER_STRIP_PATTERN.sub("", text, count=1).strip()
+                if cleaned:
+                    node.set_content(cleaned)
+
+    return nodes
+
+
 def update_chunk_counts(registered: dict[str, Path], nodes: list) -> None:
     """根据 chunk 数量更新 documents 表的 chunk_count。"""
     if not nodes:
@@ -181,6 +231,13 @@ def main() -> None:
         print("!! 无可用 chunk，索引未更新")
         return
 
+    # 第二步半：将文件元数据头解析并注入到 Chroma 节点，剥离正文中的冗余元数据头
+    print(f"\n{'=' * 50}")
+    print("第二步半：注入元数据到 Chroma 节点")
+    print(f"{'=' * 50}")
+    nodes = enrich_nodes_metadata(nodes)
+    print(f">> 已为 {len(nodes)} 个 chunk 注入来源/URL/分类等元数据")
+
     # 检查现有索引数量，决定全量重建或增量更新
     existing_count = count()
     if existing_count > 0:
@@ -201,7 +258,7 @@ def main() -> None:
         update_chunk_counts(registered, nodes)
 
     print(f"\n{'=' * 50}")
-    print("✔ 全部完成！")
+    print("[OK] 全部完成！")
     print(f"  - {len(registered)} 篇文档已注册到 MySQL")
     print(f"  - {len(nodes)} 个 chunk 已索引到 Chroma")
     print(f"{'=' * 50}")

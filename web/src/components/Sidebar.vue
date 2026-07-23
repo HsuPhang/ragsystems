@@ -1,6 +1,6 @@
 <template>
   <!-- ===== 侧边栏 ===== -->
-  <aside class="sidebar" :class="{ collapsed: !visible && !isMobile, open: isMobile && visible }">
+  <aside class="sidebar" :class="{ collapsed: !visible && !isMobile, open: isMobile && visible, 'sidebar-dark': isDark }">
     <!-- 头部 -->
     <header class="sidebar-header">
       <div class="logo">
@@ -80,20 +80,46 @@
 
     <!-- 底部用户 -->
     <footer class="sidebar-footer">
-      <div class="user-profile" @click="toggleUserMenu" :aria-haspopup="true" :aria-expanded="userMenuOpen">
-        <div class="user-avatar">{{ userInitial }}</div>
-        <span class="user-name">{{ userName }}</span>
-        <span class="user-menu" :class="{ active: userMenuOpen }">
-          <img src="/asset/gearshape.svg" class="asset-icon" alt="设置" />
-        </span>
-      </div>
-      <!-- 用户菜单下拉 -->
-      <div v-if="userMenuOpen" class="user-dropdown" @click.stop role="menu">
-        <button class="dropdown-item" @click="handleLogout" role="menuitem">
-          <img src="/asset/rectangle.portrait.and.arrow.right.svg" class="asset-icon" alt="退出"  />
-            退出登录
-        </button>
-      </div>
+      <template v-if="isAuthenticated">
+        <div class="user-profile" @click="toggleUserMenu" :aria-haspopup="true" :aria-expanded="userMenuOpen">
+          <div class="user-avatar">
+            <img v-if="avatar" :src="avatar" class="avatar-img" :alt="userName" />
+            <span v-else>{{ userInitial }}</span>
+          </div>
+          <span class="user-name">{{ userName }}</span>
+          <span class="user-menu" :class="{ active: userMenuOpen }">
+            <img src="/asset/gearshape.svg" class="asset-icon" alt="设置" />
+          </span>
+        </div>
+        <!-- 用户菜单下拉 -->
+        <div v-if="userMenuOpen" class="user-dropdown" :class="{ 'dropdown-dark': isDark }" @click.stop role="menu">
+          <button
+            class="dropdown-item"
+            @click="$emit('theme-change')"
+            role="menuitem"
+          >
+            <img
+              :src="isDark ? '/asset/appearance.darkmode.svg' : '/asset/appearance.darkmode.inverse.svg'"
+              class="asset-icon theme-icon"
+              alt="主题"
+            />
+            {{ isDark ? '浅色模式' : '深色模式' }}
+          </button>
+          <label class="dropdown-item avatar-upload" role="menuitem">
+            <img src="/asset/camera.svg" class="asset-icon" alt="更换头像" />
+            <span>更换头像</span>
+            <input type="file" accept="image/*" class="avatar-input" @change="handleAvatarChange" />
+          </label>
+          <button class="dropdown-item" @click="handleLogout" role="menuitem">
+            <img src="/asset/rectangle.portrait.and.arrow.right.svg" class="asset-icon" alt="退出"  />
+              退出登录
+          </button>
+        </div>
+      </template>
+      <button v-else class="login-btn" @click="$emit('login')">
+        <img src="/asset/person.circle.svg" class="asset-icon" alt="登录" />
+        <span>登录</span>
+      </button>
     </footer>
   </aside>
 </template>
@@ -104,15 +130,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 const props = defineProps({
   visible: Boolean,
   isMobile: Boolean,
+  isAuthenticated: Boolean,
+  isDark: Boolean,
   appName: { type: String, default: 'Gemini' },
   userName: { type: String, default: 'User' },
+  avatar: { type: String, default: '' },
   shortcutText: { type: String, default: 'Ctrl+Shift+O' },
   navItems: { type: Array, default: () => [] },
   sections: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['collapse', 'new-chat', 'navigate', 'select-recent', 'logout'])
+const emit = defineEmits(['collapse', 'new-chat', 'navigate', 'select-recent', 'logout', 'login', 'theme-change', 'avatar-change'])
 
 const userInitial = computed(() => props.userName.charAt(0).toUpperCase())
 const userMenuOpen = ref(false)
@@ -128,6 +157,14 @@ function toggleUserMenu() {
 function handleLogout() {
   userMenuOpen.value = false
   emit('logout')
+}
+
+function handleAvatarChange(e) {
+  const file = e.target.files?.[0]
+  if (file) {
+    emit('avatar-change', file)
+    userMenuOpen.value = false
+  }
 }
 
 function closeMenuOnOutside(e) {
@@ -151,13 +188,11 @@ onUnmounted(() => {
   width: 280px;
   height: calc(100vh - 20px);
   margin: 10px 0 10px 10px;
-  background: #FFFFFFEB;
+  background: var(--sidebar-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow:
-    0 8px 32px rgba(0, 20, 60, 0.06),
-    0 2px 8px rgba(0, 20, 60, 0.04);
+  border: 1px solid var(--sidebar-border);
+  box-shadow: var(--sidebar-shadow);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -199,7 +234,7 @@ onUnmounted(() => {
 .logo-text {
   font-size: 20px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
@@ -214,7 +249,7 @@ onUnmounted(() => {
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -222,8 +257,8 @@ onUnmounted(() => {
   transition: background 0.2s;
 }
 .icon-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #374151;
+  background: var(--hover-bg);
+  color: var(--text-secondary);
 }
 
 /* -- 新对话按钮 -- */
@@ -236,19 +271,20 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.03);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: var(--hover-bg-strong);
+  border: 1px solid var(--border-light);
   border-radius: 9999px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.3s ease;
   overflow: hidden;
   white-space: nowrap;
 }
 .btn-new-chat:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--hover-bg-strong);
+  filter: brightness(0.95);
 }
 .btn-icon-wrapper {
   display: flex;
@@ -260,7 +296,7 @@ onUnmounted(() => {
 .shortcut {
   margin-left: auto;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-weight: 400;
 }
 
@@ -278,7 +314,7 @@ onUnmounted(() => {
   padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-secondary);
   text-decoration: none;
   transition: all 0.2s ease;
   overflow: hidden;
@@ -291,7 +327,7 @@ onUnmounted(() => {
   font-family: inherit;
 }
 .nav-item:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-bg);
 }
 
 /* -- 分区标题 -- */
@@ -299,7 +335,7 @@ onUnmounted(() => {
   padding: 16px 28px 4px 28px;
   font-size: 12px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--text-faint);
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
@@ -318,7 +354,7 @@ onUnmounted(() => {
   padding: 8px 16px;
   border-radius: 8px;
   font-size: 14px;
-  color: #4b5563;
+  color: var(--text-muted);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -332,13 +368,22 @@ onUnmounted(() => {
   font-family: inherit;
 }
 .recent-item:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-bg);
 }
 
 /* -- 底部用户 -- */
 .sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 0 16px 12px 16px;
+  border-top: 1px solid var(--border-medium);
+}
+
+/* -- 深色模式下所有 SVG 图标显示为白色（排除主题图标和内联 SVG） -- */
+.sidebar-dark img.asset-icon:not(.theme-icon),
+.sidebar-dark img.asset-icon-sm {
+  filter: brightness(0) invert(1);
+}
+.theme-icon {
+  transition: filter 0.3s ease;
 }
 .user-profile {
   display: flex;
@@ -351,7 +396,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .user-profile:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-bg);
 }
 .user-avatar {
   width: 32px;
@@ -369,13 +414,13 @@ onUnmounted(() => {
 .user-name {
   flex: 1;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .user-menu {
-  color: #6b7280;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -387,8 +432,8 @@ onUnmounted(() => {
   left: 16px;
   right: 16px;
   margin-bottom: 4px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--dropdown-bg);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   overflow: hidden;
@@ -398,24 +443,55 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   padding: 10px 14px;
   border: none;
   background: transparent;
   font-size: 14px;
-  color: #ef4444;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
 .dropdown-item:hover {
-  background: rgba(239, 68, 68, 0.06);
+  background: #7bb1ff;
 }
 .user-menu.active {
   transform: rotate(45deg);
   transition: transform 0.2s;
 }
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.avatar-upload {
+  cursor: pointer;
+}
+.avatar-input {
+  display: none;
+}
 .sidebar-footer {
   position: relative;
+}
+.login-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--hover-bg-strong);
+  border: 1px solid var(--border-light);
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.login-btn:hover {
+  background: var(--hover-bg-strong);
+  filter: brightness(0.95);
 }
 
 /* ========== 移动端适配 ========== */

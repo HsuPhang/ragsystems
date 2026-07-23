@@ -13,7 +13,8 @@
         登录 / 注册
       </button>
       <button v-else class="btn-auth logged" :style="{ width: '36px', height: '36px', padding: '0', borderRadius: '50%' }">
-        {{ userInitial }}
+        <img v-if="avatar" :src="avatar" class="toolbar-avatar" :alt="userName" />
+        <span v-else>{{ userInitial }}</span>
       </button>
     </div>
 
@@ -32,12 +33,18 @@
           :message="msg"
           :streaming="msg.streaming"
         />
+        <!-- 思考动画（气泡外部，思考完才出现气泡） -->
+        <div v-if="isThinking" class="thinking-indicator">
+          <MathLoader :size="24" color="#3B82F6" :variant="loaderVariant" />
+          <span class="thinking-text">思考中...</span>
+        </div>
       </div>
 
       <SearchBox
         v-model="searchText"
         :placeholder="searchPlaceholder"
         :extension-label="extensionLabel"
+        :is-dark="isDark"
         @submit="handleSubmit"
         @model-change="(m) => $emit('model-change', m)"
       />
@@ -114,6 +121,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import SearchBox from './SearchBox.vue'
 import ChatMessage from './ChatMessage.vue'
+import MathLoader from './MathLoader.vue'
 import { useAuth } from '../composables/useAuth.js'
 import { register } from '../services/api.js'
 
@@ -122,8 +130,12 @@ const props = defineProps({
   searchPlaceholder: { type: String, default: '输入您的问题' },
   extensionLabel: { type: String, default: '扩展' },
   isAuthenticated: { type: Boolean, default: false },
+  isDark: { type: Boolean, default: false },
   userName: { type: String, default: '' },
+  avatar: { type: String, default: '' },
   messages: { type: Array, default: () => [] },
+  isThinking: { type: Boolean, default: false },
+  loaderVariant: { type: String, default: 'rose' },
 })
 
 const emit = defineEmits(['toggle-mobile', 'submit', 'login-success', 'model-change'])
@@ -182,6 +194,11 @@ function closeModal() {
 function closeOnOverlay(e) {
   if (e.target.classList.contains('modal-overlay')) closeModal()
 }
+
+defineExpose({
+  openModal,
+  closeModal
+})
 
 function trapFocus(e) {
   if (e.key !== 'Tab') return
@@ -242,7 +259,7 @@ async function handleRegister() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #ffffff 0%, #e8f2ff 50%, #dcebff 100%);
+  background: transparent;
   position: relative;
   min-width: 0;
 }
@@ -331,7 +348,7 @@ async function handleRegister() {
 .welcome-title {
   font-size: 36px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--text-primary);
   margin-bottom: 40px;
   text-align: center;
 }
@@ -360,11 +377,9 @@ async function handleRegister() {
 .modal {
   width: 400px;
   max-width: 92vw;
-  background: #fff;
+  background: var(--modal-bg);
   border-radius: 20px;
-  box-shadow:
-    0 24px 80px rgba(0, 0, 0, 0.18),
-    0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--modal-shadow);
   position: relative;
   transform: translateY(30px) scale(0.95);
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -385,7 +400,7 @@ async function handleRegister() {
   border-radius: 50%;
   border: none;
   background: rgba(0, 0, 0, 0.05);
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -425,13 +440,13 @@ async function handleRegister() {
 .modal-logo span {
   font-size: 22px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .modal-subtitle {
   text-align: center;
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--text-faint);
   margin-bottom: 28px;
 }
 
@@ -440,7 +455,7 @@ async function handleRegister() {
   display: flex;
   gap: 0;
   margin-bottom: 24px;
-  background: #f3f4f6;
+  background: var(--hover-bg);
   border-radius: 12px;
   padding: 3px;
 }
@@ -450,7 +465,7 @@ async function handleRegister() {
   text-align: center;
   font-size: 14px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-muted);
   border: none;
   background: transparent;
   border-radius: 10px;
@@ -458,8 +473,8 @@ async function handleRegister() {
   transition: all 0.25s ease;
 }
 .modal-tab.active {
-  background: #fff;
-  color: #1f2937;
+  background: var(--modal-bg);
+  color: var(--text-primary);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -471,27 +486,27 @@ async function handleRegister() {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 .form-input {
   width: 100%;
   padding: 12px 16px;
-  border: 1.5px solid #e5e7eb;
+  border: 1.5px solid var(--border-light);
   border-radius: 12px;
   font-size: 15px;
-  color: #1f2937;
-  background: #fafafa;
+  color: var(--text-primary);
+  background: var(--input-bg);
   outline: none;
   transition: all 0.2s ease;
 }
 .form-input:focus {
-  border-color: #4285F4;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.12);
+  border-color: var(--accent);
+  background: var(--input-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 .form-input::placeholder {
-  color: #c0c4cc;
+  color: var(--text-faint);
 }
 
 .form-error {
@@ -501,11 +516,19 @@ async function handleRegister() {
   margin-bottom: 4px;
 }
 
+/* -- 工具栏头像 -- */
+.toolbar-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 /* -- 提交按钮 -- */
 .btn-submit {
   width: 100%;
   padding: 13px 0;
-  background: #60a5fa;
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -513,8 +536,7 @@ async function handleRegister() {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
-  box-shadow: 0 4px 16px rgba(66, 133, 244, 0.30);
-  margin-top: 8px;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.30);
 }
 .btn-submit:hover {
   box-shadow: 0 6px 24px rgba(66, 133, 244, 0.45);
@@ -592,5 +614,22 @@ async function handleRegister() {
 }
 .main-center:has(.chat-container) .welcome-title {
   display: none;
+}
+
+/* -- 思考动画指示器（气泡外部） -- */
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px 0;
+}
+.thinking-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  animation: thinkingPulse 1.8s infinite ease-in-out;
+}
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
 </style>

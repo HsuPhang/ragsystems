@@ -1,6 +1,6 @@
 """LLM 调用：DeepSeek（OpenAI 兼容协议）。
 
-模型：deepseek-chat (DeepSeek-V3)
+模型：deepseek-v4-flash (DeepSeek-V4)
 - 中文能力强
 - API 兼容 OpenAI 格式
 - 价格便宜
@@ -36,8 +36,25 @@ def get_llm() -> OpenAILike:
     return llm
 
 
-def chat(messages: list[ChatMessage]) -> str:
-    """同步调用 LLM，返回字符串。"""
-    llm = get_llm()
+def chat(messages: list[ChatMessage], model: str | None = None) -> str:
+    """同步调用 LLM，返回字符串。
+
+    Args:
+        messages: 对话消息列表
+        model: 模型名，为空时使用默认模型
+    """
+    if model and model != settings.DEEPSEEK_MODEL:
+        llm = OpenAILike(
+            model=model,
+            api_base=settings.DEEPSEEK_BASE_URL,
+            api_key=settings.DEEPSEEK_API_KEY,
+            is_chat_model=True,
+            temperature=0.3,
+            max_tokens=1024,
+            timeout=60.0,
+            context_window=32768,
+        )
+    else:
+        llm = get_llm()
     resp = llm.chat(messages)
     return resp.message.content or ""

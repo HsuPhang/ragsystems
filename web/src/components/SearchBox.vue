@@ -1,5 +1,5 @@
 <template>
-  <div class="search-box">
+  <div class="search-box" :class="{ 'search-box-dark': isDark }">
     <div class="search-inner">
       <button class="icon-btn" aria-label="附加">
         <img src="/asset/paperclip.svg" class="asset-icon" alt="附加" />
@@ -30,7 +30,8 @@ import { ref, computed } from 'vue'
 const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '输入您的问题' },
-  extensionLabel: { type: String, default: 'DeepSeek-V4-Flash' }
+  extensionLabel: { type: String, default: 'DeepSeek-V4-Flash' },
+  isDark: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue', 'submit', 'model-change'])
@@ -52,12 +53,12 @@ function toggleModel() {
   max-width: 640px;
 }
 .search-inner {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--input-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--input-shadow);
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.60);
+  border: 1px solid var(--input-border);
   display: flex;
   align-items: center;
   padding: 6px 12px 6px 16px;
@@ -69,12 +70,12 @@ function toggleModel() {
   border: none;
   outline: none;
   font-size: 16px;
-  color: #1f2937;
+  color: var(--text-primary);
   padding: 15px 0;
   min-width: 0;
 }
 .search-input::placeholder {
-  color: #9ca3af;
+  color: var(--text-faint);
 }
 
 .search-extension {
@@ -84,19 +85,19 @@ function toggleModel() {
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 14px;
-  color: #4b5563;
+  color: var(--text-muted);
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
 }
 .search-extension:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-bg);
 }
 
 .search-divider {
   width: 1px;
   height: 20px;
-  background: #d1d5db;
+  background: var(--border-light);
   flex-shrink: 0;
 }
 
@@ -105,7 +106,7 @@ function toggleModel() {
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -113,8 +114,13 @@ function toggleModel() {
   transition: background 0.2s;
 }
 .icon-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #374151;
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+}
+
+/* -- 深色模式下 paperclip 图标显示为白色 -- */
+.search-box-dark .asset-icon {
+  filter: brightness(0) invert(1);
 }
 
 @media (max-width: 640px) {

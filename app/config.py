@@ -22,16 +22,20 @@ class Settings(BaseSettings):
     # ===== LLM =====
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
 
     # ===== Embedding =====
-    EMBEDDING_MODEL_PATH: str = "BAAI/bge-m3"
-    EMBEDDING_DEVICE: str = "cpu"
+    EMBEDDING_TYPE: str = "local"
+    EMBEDDING_MODEL_PATH: str = "models/bge-small-zh-v1.5"
+    EMBEDDING_DEVICE: str = "auto"
     EMBEDDING_DIM: int = 1024
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    TEXT_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     # ===== Reranker =====
-    RERANKER_MODEL_PATH: str = "BAAI/bge-reranker-large"
-    RERANKER_DEVICE: str = "cpu"
+    RERANKER_MODEL_PATH: str = "models/bge-reranker-large"
+    RERANKER_DEVICE: str = "auto"
     RERANK_TOP_N: int = 5
 
     # ===== Retrieval =====
@@ -51,13 +55,20 @@ class Settings(BaseSettings):
 
     # ===== Admin =====
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "admin123"
-    JWT_SECRET: str = "please-change-me-in-production"
+    ADMIN_PASSWORD: str = Field(
+        "admin123",
+        description="首次登录后请务必修改此密码",
+    )
+    JWT_SECRET: str = Field(
+        "please-change-me-in-production-32bytes-min!",
+        description="JWT 密钥，必须至少32字节",
+    )
     JWT_EXPIRE_MINUTES: int = 720
 
     # ===== Storage =====
     CHROMA_PERSIST_DIR: str = "./storage/chroma"
     UPLOAD_DIR: str = "./storage/uploads"
+    AVATAR_DIR: str = "./storage/uploads/avatar"
     LOG_DIR: str = "./logs"
 
     # ===== App =====

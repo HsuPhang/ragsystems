@@ -34,15 +34,6 @@ def _flatten_meta(meta: dict) -> dict:
     return {k: _flatten(v) for k, v in meta.items()}
 
 
-def _unflatten_meta(meta: dict) -> dict:
-    """从 Chroma 读取后，恢复 list 字段。"""
-    def _unflatten(v):
-        if isinstance(v, str) and v.startswith(LIST_PREFIX):
-            return v[len(LIST_PREFIX):].split(",")
-        return v
-    return {k: _unflatten(v) for k, v in meta.items()}
-
-
 def _normalize_doc_metadata(doc: Document) -> Document:
     """清洗 / 补全文档级 metadata。"""
     meta = dict(doc.metadata or {})

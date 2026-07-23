@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     use_rerank: bool = False
     top_k: int | None = None
     category: str | None = None  # 按分类过滤
+    model: str | None = None  # 模型选择: deepseek-v4-flash / deepseek-v4-pro
 
 
 class SourceItem(BaseModel):

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_admin
+from llama_index.core import Document as LIDocument
 from app.api.schemas import (
     DocumentItem,
     DocumentListResponse,
@@ -15,8 +16,8 @@ from app.api.schemas import (
     GenericResponse,
 )
 from app.config import settings
-from app.core.preprocess import enrich_node_metadata, split_documents
-from app.core.vector_store import add_nodes, delete_by_doc_id
+from app.core.preprocess import build_nodes_from_dir, enrich_node_metadata, split_documents
+from app.core.vector_store import add_nodes, delete_by_doc_id, reset_collection
 from app.db import Admin, Document, SystemLog, get_db
 from app.utils import gen_id, logger
 
@@ -80,7 +81,6 @@ async def upload_document(
     save_path.write_bytes(content)
 
     # 3. 解析 + 分块
-    from llama_index.core import Document as LIDocument
     if suffix == ".pdf":
         from llama_index.core import SimpleDirectoryReader
         reader = SimpleDirectoryReader(input_files=[str(save_path)])
@@ -189,8 +189,8 @@ def delete_document(
     if doc.file_path and Path(doc.file_path).exists():
         try:
             Path(doc.file_path).unlink()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"删除文件失败: {doc.file_path}, 错误: {e}")
 
     # 3. 软删
     doc.status = "deleted"
@@ -207,9 +207,6 @@ def rebuild_index(
     admin: Annotated[Admin, Depends(get_current_admin)],
 ):
     """根据上传目录重建整个索引（谨慎，会清空向量库）。"""
-    from app.core.vector_store import reset_collection
-    from app.core.preprocess import build_nodes_from_dir
-
     reset_collection()
     upload_dir = settings.resolve("UPLOAD_DIR")
     nodes = build_nodes_from_dir(upload_dir)

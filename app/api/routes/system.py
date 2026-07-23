@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
@@ -12,23 +11,13 @@ from app.api.auth import decode_token, get_current_admin_or_none, oauth2_scheme
 from app.api.schemas import GenericResponse
 from app.db import Admin, ChatSession, SystemConfig, get_db
 
-_config_cache: dict | None = None
-_config_cache_time: float = 0
-_CONFIG_CACHE_TTL = 60  # 缓存有效期（秒）
-
 router = APIRouter(prefix="/api/system", tags=["系统配置"])
 
 
 def _get_db_config(db: Session) -> dict:
-    """从 system_config 表中读取配置字典（带 TTL 缓存）。"""
-    global _config_cache, _config_cache_time
-    now = time.time()
-    if _config_cache is not None and (now - _config_cache_time) < _CONFIG_CACHE_TTL:
-        return _config_cache
+    """从 system_config 表中读取配置字典。"""
     rows = db.query(SystemConfig).all()
-    _config_cache = {r.key: r.value for r in rows}
-    _config_cache_time = now
-    return _config_cache
+    return {r.key: r.value for r in rows}
 
 
 def _guess_user_name(token: str | None) -> str | None:

@@ -33,13 +33,36 @@ def chat(
         db.add(sess)
         db.flush()
 
-    # 2. 调问答引擎
+    # 2. 获取历史对话（用于多轮对话）
+    conversation_history = []
+    if session_id:
+        history_rows = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.asc())
+            .limit(20)
+            .all()
+        )
+        conversation_history = [
+            {"role": r.role, "content": r.content}
+            for r in history_rows
+        ]
+
+    # 3. 调问答引擎
     filters = {"category": req.category} if req.category else None
+    # 将前端显示名映射为 API 模型名
+    model_map = {
+        "DeepSeek-V4-Flash": "deepseek-v4-flash",
+        "DeepSeek-V4-Pro": "deepseek-v4-pro",
+    }
+    model = model_map.get(req.model) if req.model else None
     result = engine_answer(
         query=req.query,
         use_rerank=req.use_rerank,
         top_k=req.top_k,
         filters=filters,
+        conversation_history=conversation_history,
+        model=model,
     )
 
     # 3. 落库

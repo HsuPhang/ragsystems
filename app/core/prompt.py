@@ -31,7 +31,8 @@ SYSTEM_PROMPT_BASE = """你是一名专业的"医疗科普助手"，职责是依
 4. **语言通俗**：避免堆砌专业术语；如必须使用术语，请用括号给出解释。
 
 ## 输出规范
-- 所有结论必须标注引用来源，格式：[来源1][来源2]…
+- 所有结论必须标注引用来源，格式：[中国疾控中心][健康中国]…
+- 来源标签使用参考资料中"来源："后的名称，如果来源相同则只标注一次
 - 回答末尾必须包含安全提示："以上内容仅供科普参考，不能替代专业医疗建议。"
 """
 
@@ -43,7 +44,7 @@ EMERGENCY_KEYWORDS = [
     "自杀", "自残", "想死",
     "骨折", "出血不止", "烫伤", "烧伤",
     "抽搐", "癫痫", "中风", "脑梗", "心梗",
-    "呼吸困难", "窒息", "喘不上气",
+    "窒息", "喘不上气",
 ]
 
 
@@ -254,6 +255,11 @@ def build_user_prompt(
         
         context_block = "\n\n".join(ctx_lines)
         lines.append(f"## 参考资料\n{context_block}\n")
+        
+        unique_sources = list(set(c.get("metadata", {}).get("source", "未知") for c in contexts))
+        if unique_sources:
+            source_hints = "、".join([f"[{s}]" for s in unique_sources])
+            lines.append(f"## 可用来源标签\n{source_hints}\n")
     else:
         lines.append("## 参考资料\n（无相关资料）\n")
     

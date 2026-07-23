@@ -43,8 +43,6 @@ OUT_ROOT = Path(__file__).resolve().parent.parent / "data" / "raw" / "cma"
 
 # 文章 URL 模式: /art/2026/4/21/art_32_60602.html
 ARTICLE_PATTERN = re.compile(r"/art/(20\d{2}/\d{1,2}/\d{1,2}/art_\d+_\d+\.html)")
-# 分页模式
-PAGE_PATTERN = re.compile(r"index(_\d+)?\.html")
 
 
 def discover_article_links(list_url: str, max_pages: int) -> list[str]:

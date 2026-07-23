@@ -5,11 +5,12 @@ function getToken() {
 }
 
 async function request(url, options = {}) {
-  const { auth = true, ...fetchOptions } = options
+  const { auth = true, headers: customHeaders = {}, ...fetchOptions } = options
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-  const headers = { 'Content-Type': 'application/json', ...fetchOptions.headers }
+  const isFormData = fetchOptions.body instanceof FormData
+  const headers = { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...customHeaders }
   if (auth) {
     const t = getToken()
     if (t) headers['Authorization'] = `Bearer ${t}`
@@ -57,6 +58,20 @@ export function register(username, password) {
   })
 }
 
+export function getProfile() {
+  return request('/admin/me')
+}
+
+export function uploadAvatar(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request('/admin/avatar', {
+    method: 'POST',
+    body: formData,
+    headers: {},
+  })
+}
+
 // ===== 系统 =====
 export function getSystemConfig() {
   return request('/system/config')
@@ -67,10 +82,10 @@ export function getRecentSessions(limit = 20) {
 }
 
 // ===== 聊天 =====
-export function sendChatMessage(query, { session_id, use_rerank, top_k, category } = {}) {
+export function sendChatMessage(query, { session_id, use_rerank, top_k, category, model } = {}) {
   return request('/chat', {
     method: 'POST',
-    body: JSON.stringify({ query, session_id, use_rerank, top_k, category }),
+    body: JSON.stringify({ query, session_id, use_rerank, top_k, category, model }),
   })
 }
 
