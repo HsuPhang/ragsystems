@@ -23,6 +23,7 @@ from bs4 import BeautifulSoup
 
 from crawler.utils import (
     extract_main_text,
+    extract_title,
     fetch,
     normalize_space,
     polite_sleep,
@@ -125,15 +126,8 @@ def fetch_article(url: str, out_dir: Path, section_name: str) -> dict | None:
 
     soup = BeautifulSoup(html, "lxml")
 
-    # 标题
-    title = ""
-    for tag in ("h1", "h2", "h3"):
-        el = soup.find(tag)
-        if el and len(el.get_text(strip=True)) > 4:
-            title = normalize_space(el.get_text())
-            break
-    if not title:
-        title = normalize_space(soup.title.get_text() if soup.title else "")
+    # 标题（og:title → 文章专用选择器 → h1 → <title>，避免误抓栏目名/导航词）
+    title = extract_title(soup)
     # 移除标题尾部已知站点名标记
     title = re.sub(r"\s*[-—|_]\s*(健康中国|中国网).*$", "", title).strip()
 

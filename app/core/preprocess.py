@@ -19,7 +19,7 @@ from app.config import settings
 from app.utils import logger
 
 # 文档级别的元数据字段（每篇文档必带，便于检索时过滤）
-DOC_META_KEYS = ("source", "category", "author", "update_time", "keywords", "url")
+DOC_META_KEYS = ("title", "source", "category", "author", "update_time", "publish_date", "keywords", "url")
 
 # 用于标记被展平的 list 类型值，保证可逆
 LIST_PREFIX = "__list__"
@@ -38,10 +38,12 @@ def _normalize_doc_metadata(doc: Document) -> Document:
     """清洗 / 补全文档级 metadata。"""
     meta = dict(doc.metadata or {})
     # 默认值
+    meta.setdefault("title", "")
     meta.setdefault("source", doc.metadata.get("file_name", "未知来源"))
     meta.setdefault("category", "未分类")
     meta.setdefault("author", "")
     meta.setdefault("update_time", "")
+    meta.setdefault("publish_date", "")
     meta.setdefault("keywords", "")
     meta.setdefault("url", "")
     # 文件名固定

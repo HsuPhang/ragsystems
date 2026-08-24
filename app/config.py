@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     EMBEDDING_TYPE: str = "local"
     EMBEDDING_MODEL_PATH: str = "models/bge-small-zh-v1.5"
     EMBEDDING_DEVICE: str = "auto"
-    EMBEDDING_DIM: int = 1024
+    EMBEDDING_DIM: int = 512
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     TEXT_EMBEDDING_MODEL: str = "text-embedding-3-small"

@@ -1,21 +1,11 @@
-<template>
+<template xmlns:width="http://www.w3.org/1999/xhtml">
   <!-- ===== 侧边栏 ===== -->
   <aside class="sidebar" :class="{ collapsed: !visible && !isMobile, open: isMobile && visible, 'sidebar-dark': isDark }">
     <!-- 头部 -->
     <header class="sidebar-header">
       <div class="logo">
-        <svg class="logo-icon" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" fill="url(#g-grad)" />
-          <defs>
-            <linearGradient id="g-grad" x1="2" y1="2" x2="22" y2="22">
-              <stop offset="0%" stop-color="#4285F4"/>
-              <stop offset="33%" stop-color="#9C27B0"/>
-              <stop offset="66%" stop-color="#EA4335"/>
-              <stop offset="100%" stop-color="#FBBC05"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <span class="logo-text">{{ appName }}</span>
+        <img src="/asset/HealthMind.svg" class="logo-icon" alt="HealthMind" width="18" />
+        <span class="logo-text">知康</span>
       </div>
       <div class="header-actions">
 
@@ -227,13 +217,13 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .logo-icon {
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 .logo-text {
-  font-size: 20px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
 }

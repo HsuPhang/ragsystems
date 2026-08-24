@@ -62,6 +62,39 @@ def normalize_space(text: str) -> str:
     return _WS_RE.sub(" ", text).strip()
 
 
+def extract_title(soup: BeautifulSoup) -> str:
+    """尽可能准确地提取文章标题。
+
+    优先级：og:title → 文章专用标题选择器 → 页面 h1 → <title> 标签（去网站后缀）。
+
+    避免 `soup.find("h1")` 这种粗暴方式误抓到网站栏目名、导航文字
+    （例如 "LANGUAGE"、"MENU" 这类与正文无关的短文本）。
+    """
+    # 1. Open Graph 标题（最可靠，通常是文章真实标题）
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og:
+        t = normalize_space(og.get("content", ""))
+        if len(t) >= 4:
+            return t
+
+    # 2. 常见文章标题 class，再到 h1
+    for selector in (".article-title", ".art-title", ".news-title", ".title", "h1"):
+        el = soup.select_one(selector)
+        if el:
+            t = normalize_space(el.get_text())
+            if 4 <= len(t) <= 100:
+                return t
+
+    # 3. 页面 <title>，去掉常见网站后缀：标题-网站名 / 标题_网站名 / 标题|网站名
+    if soup.title:
+        t = normalize_space(soup.title.get_text())
+        t = re.split(r"\s*[-_|｜]\s*", t)[0].strip()
+        if t:
+            return t
+
+    return "未知标题"
+
+
 def save_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")

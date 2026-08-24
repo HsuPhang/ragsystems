@@ -34,10 +34,12 @@ export function useAuth() {
   async function fetchProfile() {
     try {
       const res = await getProfile()
+      console.log('[useAuth] fetchProfile result:', res)
       const data = res.data || res
       if (data) {
         username.value = data.username || username.value
         avatar.value = data.avatar || ''
+        console.log('[useAuth] fetchProfile - username:', username.value, 'avatar:', avatar.value)
         localStorage.setItem('auth_username', data.username || username.value)
         localStorage.setItem('auth_avatar', data.avatar || '')
       }
@@ -47,6 +49,7 @@ export function useAuth() {
   }
 
   function setAvatar(newAvatar) {
+    console.log('[useAuth] setAvatar:', newAvatar)
     avatar.value = newAvatar
     localStorage.setItem('auth_avatar', newAvatar)
   }

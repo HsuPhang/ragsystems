@@ -8,9 +8,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import admin, chat, knowledge, system
+from app.api.routes import admin, chat, knowledge, system, user
 from app.api.schemas import GenericResponse
 from app.config import settings
+from app.db import init_db
 from app.utils import logger, setup_logger
 
 
@@ -18,6 +19,11 @@ from app.utils import logger, setup_logger
 async def lifespan(app: FastAPI):
     setup_logger()
     logger.info("===== Medical RAG 启动 =====")
+    # 启动时校验/补建表结构（幂等，仅创建不存在的表）
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"启动时建表校验失败（不影响已存在的表）: {e}")
     yield
     logger.info("===== Medical RAG 关闭 =====")
 
@@ -62,6 +68,7 @@ app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(knowledge.router)
 app.include_router(system.router)
+app.include_router(user.router)
 
 uploads_dir = settings.resolve("UPLOAD_DIR")
 uploads_dir.mkdir(parents=True, exist_ok=True)

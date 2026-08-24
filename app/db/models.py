@@ -67,7 +67,7 @@ class Document(Base):
     file_type: Mapped[str] = mapped_column(String(16), default="")
     file_size: Mapped[int] = mapped_column(Integer, default=0)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
-    keywords: Mapped[dict] = mapped_column(JSON, default=list)
+    keywords: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(16), default="active")  # active / deleted
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     update_time: Mapped[datetime] = mapped_column(
@@ -75,12 +75,24 @@ class Document(Base):
     )
 
 
+class User(Base):
+    """普通用户"""
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    avatar: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    user_type: Mapped[str] = mapped_column(String(16), default="user")  # "user" / "admin"
     title: Mapped[str] = mapped_column(String(255), default="新会话")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -110,6 +122,18 @@ class SystemLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class UserProfile(Base):
+    """用户健康画像（长期记忆）。"""
+    __tablename__ = "user_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    profile_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+
 class SystemConfig(Base):
     __tablename__ = "system_config"
 
@@ -118,7 +142,7 @@ class SystemConfig(Base):
     value: Mapped[str] = mapped_column(Text, default="")
     description: Mapped[str] = mapped_column(String(255), default="")
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
 

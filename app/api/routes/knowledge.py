@@ -114,11 +114,8 @@ async def upload_document(
         for n in nodes
     ]
 
-    # 4. 入向量库
-    add_nodes(nodes)
-
-    # 5. 写 MySQL
-    db.add(Document(
+    # 4. 先写 MySQL（可回滚）
+    doc_record = Document(
         doc_id=doc_id,
         title=title or file.filename or "",
         source=source or file.filename or "",
@@ -129,12 +126,23 @@ async def upload_document(
         file_size=len(content),
         chunk_count=len(nodes),
         keywords=kw_list,
-    ))
+    )
+    db.add(doc_record)
     db.add(SystemLog(
         level="INFO", module="knowledge", action="upload",
         message=f"上传文档: {file.filename}, chunks={len(nodes)}",
         operator=admin.username,
     ))
+    db.flush()  # 先 flush 但不提交，若后面的 Chroma 失败可 rollback
+
+    # 5. 再写向量库（Chroma 不支持事务回滚）
+    try:
+        add_nodes(nodes)
+    except Exception:
+        db.rollback()
+        logger.exception("Chroma 写入失败，已回滚 MySQL")
+        raise
+
     db.commit()
 
     return GenericResponse(
@@ -182,22 +190,30 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
 
-    # 1. 删向量
-    n = delete_by_doc_id(doc_id)
-
-    # 2. 删文件
-    if doc.file_path and Path(doc.file_path).exists():
-        try:
-            Path(doc.file_path).unlink()
-        except Exception as e:
-            logger.warning(f"删除文件失败: {doc.file_path}, 错误: {e}")
-
-    # 3. 软删
+    # 1. 先软删 MySQL（可回滚）
+    old_file_path = doc.file_path  # 保存用于后续清理
     doc.status = "deleted"
     db.add(SystemLog(
         level="INFO", module="knowledge", action="delete",
-        message=f"删除文档: {doc_id}, chunks={n}", operator=admin.username,
+        message=f"删除文档: {doc_id}", operator=admin.username,
     ))
+    db.flush()
+
+    # 2. 再删向量库
+    try:
+        n = delete_by_doc_id(doc_id)
+    except Exception:
+        db.rollback()
+        logger.exception("Chroma 删除失败，已回滚 MySQL")
+        raise
+
+    # 3. 删文件（文件删除失败不阻塞流程）
+    if old_file_path and Path(old_file_path).exists():
+        try:
+            Path(old_file_path).unlink()
+        except Exception as e:
+            logger.warning(f"删除文件失败: {old_file_path}, 错误: {e}")
+
     db.commit()
     return GenericResponse(message=f"已删除（向量 {n} 条）")
 

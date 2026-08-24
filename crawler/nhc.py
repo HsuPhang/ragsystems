@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 
 from crawler.utils import (
     extract_main_text,
+    extract_title,
     fetch,
     normalize_space,
     polite_sleep,
@@ -103,13 +104,8 @@ def fetch_article(url: str, out_dir: Path) -> dict | None:
         return None
     soup = BeautifulSoup(html, "lxml")
 
-    # 标题
-    title = ""
-    h1 = soup.find("h1") or soup.find("h2")
-    if h1:
-        title = normalize_space(h1.get_text())
-    if not title:
-        title = normalize_space(soup.title.get_text() if soup.title else "")
+    # 标题（og:title → 文章专用选择器 → h1 → <title>，避免误抓栏目名/导航词）
+    title = extract_title(soup)
 
     # 发布时间（粗略）
     publish_date = ""

@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 
 from crawler.utils import (
     extract_main_text,
+    extract_title,
     fetch,
     normalize_space,
     polite_sleep,
@@ -99,12 +100,7 @@ def fetch_article(url: str, out_dir: Path, category: str) -> dict | None:
         return None
     soup = BeautifulSoup(html, "lxml")
 
-    title = ""
-    h1 = soup.find("h1") or soup.find("h2")
-    if h1:
-        title = normalize_space(h1.get_text())
-    if not title:
-        title = normalize_space(soup.title.get_text() if soup.title else "")
+    title = extract_title(soup)
 
     pub = ""
     pnode = soup.find(class_="time") or soup.find(class_="date") or soup.find(class_="publish")

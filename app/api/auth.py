@@ -11,10 +11,11 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import Admin, get_db
+from app.db import Admin, User, get_db
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/login", auto_error=False)
+user_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/user/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -71,3 +72,35 @@ def get_current_admin_or_none(
     if not payload or "sub" not in payload:
         return None
     return db.query(Admin).filter(Admin.username == payload["sub"]).first()
+
+
+def get_current_user(
+    token: Annotated[str | None, Depends(user_oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未提供登录凭证",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(status_code=401, detail="无效或过期的登录凭证")
+
+    user = db.query(User).filter(User.username == payload["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    return user
+
+
+def get_current_user_or_none(
+    token: Annotated[str | None, Depends(user_oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User | None:
+    if not token:
+        return None
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        return None
+    return db.query(User).filter(User.username == payload["sub"]).first()

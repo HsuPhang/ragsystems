@@ -1,15 +1,13 @@
 """管理员接口：登录、统计、用户/日志查看。"""
 from __future__ import annotations
 
-import os
-import shutil
-import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.auth import create_token, get_current_admin, hash_password, verify_password
+from app.api.avatar import get_avatar_url, remove_old_avatar, validate_and_save_avatar
 from app.api.schemas import (
     GenericResponse,
     LoginRequest,
@@ -19,20 +17,6 @@ from app.config import settings
 from app.core.vector_store import count as chroma_count
 from app.db import Admin, ChatMessage, ChatSession, Document, SystemLog, get_db
 from app.utils import logger
-
-ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
-
-
-def _get_avatar_url(avatar_path: str) -> str:
-    if not avatar_path:
-        return ""
-    return f"/uploads/avatar/{avatar_path}"
-
-
-def _ensure_avatar_dir() -> str:
-    avatar_dir = settings.resolve("AVATAR_DIR")
-    avatar_dir.mkdir(parents=True, exist_ok=True)
-    return str(avatar_dir)
 
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
@@ -86,13 +70,13 @@ def login(req: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> Generic
         "access_token": token,
         "token_type": "bearer",
         "username": admin.username,
-        "avatar": _get_avatar_url(admin.avatar),
+        "avatar": get_avatar_url(admin.avatar),
     })
 
 
 @router.get("/me", response_model=GenericResponse)
 def me(admin: Annotated[Admin, Depends(get_current_admin)]) -> GenericResponse:
-    return GenericResponse(data={"username": admin.username, "avatar": _get_avatar_url(admin.avatar)})
+    return GenericResponse(data={"username": admin.username, "avatar": get_avatar_url(admin.avatar)})
 
 
 @router.post("/avatar", response_model=GenericResponse)
@@ -101,34 +85,11 @@ def upload_avatar(
     file: UploadFile,
     db: Annotated[Session, Depends(get_db)],
 ):
-    filename = file.filename
-    if not filename:
-        raise HTTPException(status_code=400, detail="文件名不能为空")
-
-    ext = filename.split(".")[-1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"不支持的文件类型，支持: {', '.join(ALLOWED_EXTENSIONS)}")
-
-    content = file.file.read()
-    if len(content) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="文件大小不能超过2MB")
-
-    avatar_dir = _ensure_avatar_dir()
-    new_filename = f"{uuid.uuid4().hex}.{ext}"
-    new_path = os.path.join(avatar_dir, new_filename)
-
-    if admin.avatar:
-        old_path = os.path.join(avatar_dir, admin.avatar)
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    with open(new_path, "wb") as f:
-        f.write(content)
-
+    remove_old_avatar(admin.avatar)
+    new_filename = validate_and_save_avatar(file)
     admin.avatar = new_filename
     db.commit()
-
-    return GenericResponse(data={"avatar": _get_avatar_url(new_filename)})
+    return GenericResponse(data={"avatar": get_avatar_url(new_filename)})
 
 
 @router.get("/stats", response_model=StatsResponse)

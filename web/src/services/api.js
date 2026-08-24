@@ -41,9 +41,9 @@ async function request(url, options = {}) {
   }
 }
 
-// ===== 认证 =====
+// ===== 认证（用户） =====
 export function login(username, password) {
-  return request('/admin/login', {
+  return request('/user/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
     auth: false,
@@ -51,7 +51,7 @@ export function login(username, password) {
 }
 
 export function register(username, password) {
-  return request('/admin/register', {
+  return request('/user/register', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
     auth: false,
@@ -59,13 +59,13 @@ export function register(username, password) {
 }
 
 export function getProfile() {
-  return request('/admin/me')
+  return request('/user/me')
 }
 
 export function uploadAvatar(file) {
   const formData = new FormData()
   formData.append('file', file)
-  return request('/admin/avatar', {
+  return request('/user/avatar', {
     method: 'POST',
     body: formData,
     headers: {},

@@ -2,9 +2,9 @@
 
 设计：
 - Top-K = 10（默认）
-- 相似度阈值 = 0.6
-- 低相关度（0.4~0.6）→ 降级回答：允许 LLM 回答，标注非知识库内容
-- 极低相关度（<0.4）→ 直接拒答："知识库暂无相关资料"
+- 相似度阈值 = 0.6（settings.SIMILARITY_THRESHOLD）
+- 相关度不足（top_score < threshold）→ 直接程序拒答，不让 LLM 基于通用知识发挥（防幻觉）
+- 无检索结果 → 直接拒答
 """
 from __future__ import annotations
 
@@ -23,8 +23,7 @@ from app.utils import logger
 class RetrievalResult:
     """检索结果封装。"""
     nodes: list[NodeWithScore] = field(default_factory=list)
-    rejected: bool = False           # 是否被阈值拒绝（极低相关度）
-    low_relevance: bool = False      # 是否低相关度（需降级回答）
+    rejected: bool = False           # 是否被阈值拒绝（相关度不足）
     reject_reason: str = ""          # 拒答原因
     top_score: float = 0.0           # 最高分（用于前端展示）
 
@@ -54,23 +53,13 @@ def retrieve(
 
     # cosine 距离转相似度：similarity = 1 - distance
     # LlamaIndex + chromadb cosine 模式下 score 已经是相似度（0~1）
-    MIN_RELEVANCE = 0.4
-
-    if top_score < MIN_RELEVANCE:
-        logger.info(f"拒答: top_score={top_score:.3f} < min={MIN_RELEVANCE}")
+    if top_score < threshold:
+        # 相关度不足以支撑回答：直接程序拒答，不让 LLM 基于通用知识发挥（防幻觉）
+        logger.info(f"拒答(相关度不足): top_score={top_score:.3f} < threshold={threshold}")
         return RetrievalResult(
             nodes=raw_nodes,
             rejected=True,
-            reject_reason=f"知识库暂无相关资料（最高相关度 {top_score:.2f}）",
-            top_score=top_score,
-        )
-
-    if top_score < threshold:
-        logger.info(f"降级回答: top_score={top_score:.3f} < threshold={threshold}")
-        return RetrievalResult(
-            nodes=raw_nodes,
-            rejected=False,
-            low_relevance=True,
+            reject_reason="知识库中未找到与该问题直接相关的资料，暂时无法基于知识库回答。",
             top_score=top_score,
         )
 
@@ -79,6 +68,5 @@ def retrieve(
     return RetrievalResult(
         nodes=raw_nodes,
         rejected=False,
-        low_relevance=False,
         top_score=top_score,
     )

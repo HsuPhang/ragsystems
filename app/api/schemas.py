@@ -21,9 +21,11 @@ class ChatRequest(BaseModel):
 class SourceItem(BaseModel):
     index: int
     source: str
+    title: str = ""
     category: str = ""
     author: str = ""
     update_time: str = ""
+    publish_date: str = ""
     url: str = ""
     chunk_id: str = ""
     score: float

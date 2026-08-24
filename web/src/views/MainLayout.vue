@@ -246,9 +246,14 @@ function handleLoginSuccess() {
 
 async function handleAvatarChange(file) {
   try {
+    console.log('[Avatar] 开始上传:', file.name, file.type)
     const res = await uploadAvatar(file)
+    console.log('[Avatar] 上传结果:', res)
     if (res?.data?.avatar) {
+      console.log('[Avatar] 设置头像:', res.data.avatar)
       setAvatar(res.data.avatar)
+    } else {
+      console.warn('[Avatar] 上传响应中没有 avatar 字段:', res)
     }
   } catch (e) {
     console.error('上传头像失败:', e)

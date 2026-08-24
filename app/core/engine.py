@@ -46,7 +46,6 @@ class QAResult:
     top_score: float = 0.0
     used_rerank: bool = True
     rejected: bool = False
-    low_relevance: bool = False  # 是否低相关度降级回答
 
 
 def _build_sources(nodes) -> list[dict]:
@@ -61,10 +60,12 @@ def _build_sources(nodes) -> list[dict]:
         seen.add(key)
         sources.append({
             "index": i,
+            "title": meta.get("title", ""),
             "source": meta.get("source", "未知"),
             "category": meta.get("category", ""),
             "author": meta.get("author", ""),
             "update_time": meta.get("update_time", ""),
+            "publish_date": meta.get("publish_date", "") or meta.get("update_time", ""),
             "url": meta.get("url", ""),
             "chunk_id": meta.get("chunk_id", ""),
             "score": round(float(n.score or 0), 4),
@@ -86,7 +87,10 @@ def _format_contexts(nodes) -> list[dict]:
 
 
 def _append_source_list(answer_text: str, sources: list[dict]) -> str:
-    """在回答末尾追加格式化的来源列表，包含可点击的超链接。"""
+    """在回答末尾追加格式化的来源列表：以文章标题为主，附来源·分类·日期，标题做成可点击链接。
+
+    使用 [1][2] 角标编号，便于正文中用 [1] 形式引用对应资料。
+    """
     if not answer_text or not sources:
         return answer_text
 
@@ -97,22 +101,27 @@ def _append_source_list(answer_text: str, sources: list[dict]) -> str:
         if url and url not in ("-", "") and url not in seen_urls:
             seen_urls.add(url)
             valid_sources.append({
+                "title": s.get("title", ""),
                 "source": s.get("source", "未知"),
                 "url": url,
                 "category": s.get("category", ""),
+                "publish_date": s.get("publish_date", ""),
             })
 
     if not valid_sources:
         return answer_text
 
-    lines = []
-    lines.append("\n\n---\n")
-    lines.append("**参考来源：**")
+    lines = ["\n\n---\n", "**参考来源：**"]
     for i, s in enumerate(valid_sources, 1):
-        line = f"{i}. [{s['source']}]({s['url']})"
+        title = s["title"].strip() or "未知标题"
+        # 标题做成可点击链接
+        head = f"[{i}] 《[{title}]({s['url']})》"
+        meta_parts = [s["source"]]
         if s.get("category"):
-            line += f" | {s['category']}"
-        lines.append(line)
+            meta_parts.append(s["category"])
+        if s.get("publish_date") and s["publish_date"] not in ("未知", ""):
+            meta_parts.append(s["publish_date"])
+        lines.append(f"{head} · {' · '.join(meta_parts)}")
 
     return answer_text + "\n".join(lines)
 
@@ -124,6 +133,7 @@ def answer(
     filters: dict[str, Any] | None = None,
     conversation_history: list[dict] | None = None,
     model: str | None = None,
+    user_profile: dict | None = None,
 ) -> QAResult:
     """主入口：接收 query，返回 QAResult。
     
@@ -133,6 +143,8 @@ def answer(
         top_k: 检索数量
         filters: 过滤条件
         conversation_history: 历史对话（用于多轮追问）
+        model: 模型选择
+        user_profile: 用户长期画像（健康背景），用于个性化科普，缓解多轮割裂
     
     TODO: 当前为同步调用，等待 LLM 完整响应后一次性返回。
           后续应实现 async generator 流式输出（stream_answer），
@@ -167,8 +179,8 @@ def answer(
             top_score=result.top_score,
         )
 
-    # ③ Reranker 重排（低相关度时跳过 rerank）
-    if use_rerank and not result.low_relevance:
+    # ③ Reranker 重排
+    if use_rerank:
         try:
             result = rerank(query, result)
         except Exception as e:
@@ -177,8 +189,7 @@ def answer(
     # ④ 构造 Prompt
     contexts = _format_contexts(result.nodes)
     system_prompt = build_system_prompt(query)
-    user_prompt = build_user_prompt(query, contexts, conversation_history)
-    is_low_relevance = result.low_relevance
+    user_prompt = build_user_prompt(query, contexts, conversation_history, user_profile)
 
     # ⑤ LLM 生成
     try:
@@ -195,10 +206,7 @@ def answer(
             used_rerank=use_rerank,
         )
 
-    # ⑥ 返回（低相关度时添加标注）
-    if is_low_relevance:
-        answer_text = f"【提示】以下回答基于通用知识，非知识库内容，请谨慎参考：\n\n{answer_text}"
-
+    # ⑥ 返回（参考来源由程序追加，不让 LLM 自己编）
     sources = _build_sources(result.nodes)
     answer_text = _append_source_list(answer_text, sources)
 
@@ -207,5 +215,4 @@ def answer(
         sources=sources,
         top_score=result.top_score,
         used_rerank=use_rerank,
-        low_relevance=is_low_relevance,
     )

@@ -158,11 +158,14 @@ def enrich_nodes_metadata(nodes: list) -> list:
 
         meta = meta_cache[fp_resolved]
         if meta:
-            # 注入解析出的元数据
+            # 注入解析出的元数据（含标题，供检索结果展示与引用链路使用）
+            node.metadata["title"] = meta["title"]
             node.metadata["source"] = meta["source"]
             node.metadata["url"] = meta["url"]
             node.metadata["category"] = meta["category"]
             node.metadata["update_time"] = meta["update_time"]
+            # 发布时间统一命名（与 update_time 同值，便于上层按 publish_date 取用）
+            node.metadata["publish_date"] = meta["update_time"]
             # 同时设置 author 为来源（与 MySQL 注册保持一致）
             node.metadata.setdefault("author", meta["source"])
 
@@ -204,7 +207,7 @@ def update_chunk_counts(registered: dict[str, Path], nodes: list) -> None:
         print(f"!! 更新 chunk_count 失败: {e}")
 
 
-def main() -> None:
+def main(rebuild: bool = False) -> None:
     setup_logger()
     raw_dir = Path(__file__).resolve().parent.parent / "data" / "raw"
     if not raw_dir.exists():
@@ -240,7 +243,10 @@ def main() -> None:
 
     # 检查现有索引数量，决定全量重建或增量更新
     existing_count = count()
-    if existing_count > 0:
+    if rebuild:
+        print(f">> --rebuild 模式：清空现有 {existing_count} 个 chunk 后全量重建")
+        reset_collection()
+    elif existing_count > 0:
         print(f">> 检测到现有索引 {existing_count} 个 chunk，执行增量更新")
     else:
         print(">> 初始化新的 Chroma collection...")
@@ -265,4 +271,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="构建 Chroma 索引 + 注册文档到 MySQL")
+    parser.add_argument(
+        "--rebuild", action="store_true",
+        help="全量重建：先清空 collection 再导入（metadata 改动后需用此重建）",
+    )
+    args = parser.parse_args()
+    main(rebuild=args.rebuild)

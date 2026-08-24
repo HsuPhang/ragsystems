@@ -75,11 +75,12 @@ def get_reranker():
             raise
     else:
         device = detect_device(settings.RERANKER_DEVICE)
-        logger.info(f"本地模型路径无效，尝试从 HuggingFace 下载: {model_path} (device={device})")
+        hf_model = "BAAI/bge-reranker-large"
+        logger.info(f"本地模型路径无效，从 HuggingFace 下载: {hf_model} (device={device})")
         from sentence_transformers import CrossEncoder
         _reranker_type = "pytorch"
         _reranker = CrossEncoder(
-            model_path,
+            hf_model,
             device=device,
             max_length=512,
         )
